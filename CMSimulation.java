@@ -65,8 +65,14 @@ public class CMSimulation extends DemoApplication {
 	private static final int NUM_CELLS = 100;
 	private static final int MAX_PROXIES = NUM_WALLS + NUM_MESH_BOXES + NUM_MOLECULES + NUM_CELLS;
 	
-	private static Vector3f testTubeSize = new Vector3f(60f, 80f, 50f);
+	
 	private static float wallThick = 2f;
+	private static float meshThick = 6f;
+	private static float pore_density = 100000;
+	private static float pore_diameter = 14; //Actually 8 but need room for 10micrometer cells
+	private static float well_depth = 40;
+	private static float inset_depth = 60;
+	private static Vector3f testTubeSize = new Vector3f(80f, well_depth + inset_depth + meshThick, 80f);
 	
 	private StringBuilder buf;
 	
@@ -159,9 +165,11 @@ public class CMSimulation extends DemoApplication {
 		CMWall front = new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, -testTubeSize.z/2));
 		front.setVisible(false);
 		addBioObject(front);
+
+		addMesh(testTubeSize.x, testTubeSize.z, meshThick, pore_density, pore_diameter, well_depth);
 		
 		
-		CMMolecule.fillSpace(this, NUM_MOLECULES, new Vector3f(-testTubeSize.x/2, -testTubeSize.y/2, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2, 0f, testTubeSize.z/2));
+		CMMolecule.fillSpace(this, NUM_MOLECULES, new Vector3f(-testTubeSize.x/2, -testTubeSize.y/2, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2, well_depth-testTubeSize.y/2, testTubeSize.z/2));
 
 		clientResetScene();
 	}
@@ -170,7 +178,7 @@ public class CMSimulation extends DemoApplication {
 	public void myinit(){
 		super.myinit();
 		//gl.glClearColor(0f, 0f, 0f, 1f);
-		setCameraDistance(50);
+		setCameraDistance(80);
 		updateCamera();
 	}
 	
@@ -210,7 +218,7 @@ public class CMSimulation extends DemoApplication {
 				yStart += yIncr;
 
 				// JAVA NOTE: added
-				s = "LMB=drag, RMB=shoot box, MIDDLE=apply impulse";
+				s = "LMB=drag"; // RMB=shoot box, MIDDLE=apply impulse";
 				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
 				yStart += yIncr;
 				
@@ -350,7 +358,52 @@ public class CMSimulation extends DemoApplication {
 		updateCamera();
 	}
 	
-
+	public void addMesh(float width, float depth, float thickness, float p_density, float p_diameter, float height){
+		//p_density is pore density - pores/cm^2
+		//p_diameter is pore diameter in micrometers
+		//although the diameter is given, for now the pores are square
+		//In addition, the number of pores will be rows * cols - even if that's a few too many
+		//The Mesh's x and z centers are the origin. The y center is height
+		
+		//find number of pores 
+		double numPores = Math.ceil(p_density * width * depth * Math.pow(10, -8));
+		
+		//How many rows and columns will we need? R*C>=numPores and C/R approx w/l
+		//So R^2 >= Nl/w
+		int numRows = (int)Math.ceil(Math.sqrt(numPores * depth / width));
+		int numCols = (int)Math.ceil(numPores/numRows);
+		float colWidth = width/numCols;
+		float rowHeight = depth/numRows;
+		float z_space = (rowHeight - p_diameter)/2;
+		float x_space = (colWidth - p_diameter)/2;
+		//Add row spacers:
+		for (int i = 0; i < numRows; i++){
+			Vector3f wall_origin = new Vector3f(0f, (height - testTubeSize.y/2 - thickness/2), (depth / 2 - i * (z_space*2+p_diameter) - z_space/2));
+			CMWall wall = new CMWall(width, thickness, z_space, wall_origin);
+			wall.setColor(.7f, .7f, .9f);
+			addBioObject(wall);
+			wall_origin = new Vector3f(0f, (height - testTubeSize.y/2 - thickness/2), (depth / 2 - i * (z_space*2+p_diameter) -(z_space+p_diameter)- z_space/2 ));
+			wall = new CMWall(width, thickness, z_space, wall_origin);
+			wall.setColor(.7f, .7f, .9f);
+			addBioObject(wall);
+		}
+		
+		for (int i = 0; i < numRows; i++){
+			float y_value = height - testTubeSize.y/2 - thickness/2;
+			float z_value = depth/2 - z_space - p_diameter/2 - i * (2 * z_space + p_diameter);
+			for (int j = 0; j < numCols; j++){
+				float x_value = width/2 - (j * (2 * x_space + p_diameter)) - x_space/2;
+				CMWall wall = new CMWall(x_space, thickness, p_diameter, new Vector3f(x_value, y_value, z_value));
+				wall.setColor(.7f, .7f, .9f);
+				addBioObject(wall);
+				x_value = width/2 - (j * (2 * x_space + p_diameter)) - x_space/2-p_diameter-x_space;
+				wall = new CMWall(x_space, thickness, p_diameter, new Vector3f(x_value, y_value, z_value));
+				wall.setColor(.7f, .7f, .9f);
+				addBioObject(wall);
+			}
+		}
+	}
+	
 	public void addBioObject(CMBioObj obj){
 		//This method adds a wall to the container
 		modelObjects.add(obj);
