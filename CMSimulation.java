@@ -1,0 +1,373 @@
+/* This is an extention of the jbullet basic demo
+ * designed to model cellular migration of retinal progenitor cells
+ * 
+ * 
+ * Bullet Continuous Collision Detection and Physics Library
+ * Copyright (c) 2003-2008 Erwin Coumans  http://www.bulletphysics.com/
+ *
+ * This software is provided 'as-is', without any express or implied warranty.
+ * In no event will the authors be held liable for any damages arising from
+ * the use of this software.
+ * 
+ * Permission is granted to anyone to use this software for any purpose, 
+ * including commercial applications, and to alter it and redistribute it
+ * freely, subject to the following restrictions:
+ * 
+ * 1. The origin of this software must not be misrepresented; you must not
+ *    claim that you wrote the original software. If you use this software
+ *    in a product, an acknowledgment in the product documentation would be
+ *    appreciated but is not required.
+ * 2. Altered source versions must be plainly marked as such, and must not be
+ *    misrepresented as being the original software.
+ * 3. This notice may not be removed or altered from any source distribution.
+ */
+
+package cellModel;
+
+import com.bulletphysics.util.ObjectArrayList;
+import com.bulletphysics.collision.broadphase.BroadphaseInterface;
+import com.bulletphysics.collision.broadphase.DbvtBroadphase;
+import com.bulletphysics.collision.dispatch.CollisionDispatcher;
+import com.bulletphysics.collision.dispatch.DefaultCollisionConfiguration;
+import com.bulletphysics.collision.shapes.BoxShape;
+import com.bulletphysics.collision.shapes.CollisionShape;
+import com.bulletphysics.demos.opengl.DemoApplication;
+import com.bulletphysics.demos.opengl.GLDebugDrawer;
+import com.bulletphysics.demos.opengl.IGL;
+import com.bulletphysics.demos.opengl.LWJGL;
+import com.bulletphysics.demos.opengl.GLShapeDrawer;
+import com.bulletphysics.demos.opengl.FastFormat;
+import com.bulletphysics.dynamics.DiscreteDynamicsWorld;
+import com.bulletphysics.dynamics.RigidBody;
+import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
+import com.bulletphysics.dynamics.constraintsolver.ConstraintSolver;
+import com.bulletphysics.dynamics.constraintsolver.SequentialImpulseConstraintSolver;
+import com.bulletphysics.linearmath.DefaultMotionState;
+import com.bulletphysics.linearmath.Transform;
+import com.bulletphysics.linearmath.DebugDrawModes;
+import javax.vecmath.Vector3f;
+import org.lwjgl.LWJGLException;
+import static com.bulletphysics.demos.opengl.IGL.*;
+import java.util.Random;
+
+/**
+ * BasicDemo is good starting point for learning the code base and porting.
+ * 
+ * @author jezek2
+ */
+public class CMSimulation extends DemoApplication {
+
+
+	// maximum number of objects (test tube walls and apparatus, molecules and cells)
+	private static final int NUM_WALLS = 6;
+	private static final int NUM_MESH_BOXES = 100;
+	private static final int NUM_MOLECULES = 1000;
+	private static final int NUM_CELLS = 100;
+	private static final int MAX_PROXIES = NUM_WALLS + NUM_MESH_BOXES + NUM_MOLECULES + NUM_CELLS;
+	
+	private static Vector3f testTubeSize = new Vector3f(60f, 80f, 50f);
+	private static float wallThick = 2f;
+	
+	private StringBuilder buf;
+	
+	
+	// keep the collision shapes, for deletion/cleanup
+	private ObjectArrayList<CollisionShape> collisionShapes = new ObjectArrayList<CollisionShape>();
+	private ObjectArrayList<CMBioObj> modelObjects = new ObjectArrayList<CMBioObj>();
+	private BroadphaseInterface broadphase;
+	private CollisionDispatcher dispatcher;
+	private ConstraintSolver solver;
+	private DefaultCollisionConfiguration collisionConfiguration;
+	private Random random;
+	
+	public CMSimulation(IGL gl, long seed){
+		super(gl);
+		random = new Random(seed);
+		buf = new StringBuilder();
+	}
+	
+	public CMSimulation(IGL gl) {
+		this(gl, System.currentTimeMillis());
+	}
+	
+	@Override
+	public void clientMoveAndDisplay() {
+		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		int numObjects = modelObjects.size();
+		for (int i = 0; i < numObjects; i++){
+			CMBioObj bioObj = modelObjects.getQuick(i);
+			bioObj.updateObject(random);
+		}
+
+		// simple dynamics world doesn't handle fixed-time-stepping
+		float ms = getDeltaTimeMicroseconds();
+
+		// step the simulation
+		if (dynamicsWorld != null) {
+			dynamicsWorld.stepSimulation(ms / 1000000f);
+			// optional but useful: debug drawing
+			dynamicsWorld.debugDrawWorld();
+		}
+
+		renderme();
+
+		//glFlush();
+		//glutSwapBuffers();
+	}
+
+	@Override
+	public void displayCallback() {
+		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		renderme();
+
+		// optional but useful: debug drawing to detect problems
+		if (dynamicsWorld != null) {
+			dynamicsWorld.debugDrawWorld();
+		}
+
+		//glFlush();
+		//glutSwapBuffers();
+	}
+
+	public void initPhysics() {
+		setCameraDistance(50f);
+
+		// collision configuration contains default setup for memory, collision setup
+		collisionConfiguration = new DefaultCollisionConfiguration();
+
+		// use the default collision dispatcher. For parallel processing you can use a diffent dispatcher (see Extras/BulletMultiThreaded)
+		dispatcher = new CollisionDispatcher(collisionConfiguration);
+
+		broadphase = new DbvtBroadphase();
+
+		// the default constraint solver. For parallel processing you can use a different solver (see Extras/BulletMultiThreaded)
+		SequentialImpulseConstraintSolver sol = new SequentialImpulseConstraintSolver();
+		solver = sol;
+		
+		dynamicsWorld = new DiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfiguration);
+
+		//Simulation takes place in fluid.  For now, no gravity
+		dynamicsWorld.setGravity(new Vector3f(0f, 0f, 0f));
+
+		addBioObject(new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, -testTubeSize.y/2, 0f)));
+		addBioObject(new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, testTubeSize.y/2, 0f)));
+		addBioObject(new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f(-testTubeSize.x/2, 0f, 0f)));
+		addBioObject(new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f(testTubeSize.x/2, 0f, 0f)));
+		addBioObject(new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, testTubeSize.z/2)));
+		
+		CMWall front = new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, -testTubeSize.z/2));
+		front.setVisible(false);
+		addBioObject(front);
+		
+		
+		CMMolecule.fillSpace(this, NUM_MOLECULES, new Vector3f(-testTubeSize.x/2, -testTubeSize.y/2, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2, 0f, testTubeSize.z/2));
+
+		clientResetScene();
+	}
+	
+	@Override
+	public void myinit(){
+		super.myinit();
+		//gl.glClearColor(0f, 0f, 0f, 1f);
+		setCameraDistance(50);
+		updateCamera();
+	}
+	
+	
+	@Override
+	public void renderme() {
+		updateCamera();
+
+		Transform m = new Transform();
+		if (dynamicsWorld != null) {
+			int numObjects = modelObjects.size();
+			for (int i = 0; i < numObjects; i++){
+				CMBioObj bioObj = modelObjects.getQuick(i);
+				if (bioObj.isVisible()){
+					RigidBody rb = bioObj.getRigidBody();
+					DefaultMotionState motionState = (DefaultMotionState)rb.getMotionState();
+					m.set(motionState.graphicsWorldTrans);
+					GLShapeDrawer.drawOpenGL(gl, m, bioObj.getCollisionShape(), bioObj.getColor3Vector(), getDebugMode());
+				}
+			}
+				
+
+			float xOffset = 10f;
+			float yStart = 20f;
+			float yIncr = 20f;
+
+			gl.glDisable(GL_LIGHTING);
+			gl.glColor3f(1f, 1f, 1f);
+
+			if ((debugMode & DebugDrawModes.NO_HELP_TEXT) == 0) {
+				setOrthographicProjection();
+
+				yStart = showProfileInfo(xOffset, yStart, yIncr);
+
+				String s = "mouse to interact";
+				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				yStart += yIncr;
+
+				// JAVA NOTE: added
+				s = "LMB=drag, RMB=shoot box, MIDDLE=apply impulse";
+				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				yStart += yIncr;
+				
+				s = "space to reset";
+				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				yStart += yIncr;
+
+				s = "cursor keys and z,x to navigate";
+				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				yStart += yIncr;
+
+				s = "i to toggle simulation, s single step";
+				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				yStart += yIncr;
+
+				s = "q to quit";
+				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				yStart += yIncr;
+
+				//s = ". to shoot box or trimesh (MovingConcaveDemo)";
+				//drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				//yStart += yIncr;
+
+				// not yet hooked up again after refactoring...
+
+				//s = "d to toggle deactivation";
+				//drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				//yStart += yIncr;
+
+				//s = "g to toggle mesh animation (ConcaveDemo)";
+				//drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				//yStart += yIncr;
+
+				// JAVA NOTE: added
+				//s = "e to spawn new body (GenericJointDemo)";
+				//drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				//yStart += yIncr;
+
+				s = "h to toggle help text";
+				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				yStart += yIncr;
+
+				//buf = "p to toggle profiling (+results to file)";
+				//drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				yStart += yIncr;
+
+				//bool useBulletLCP = !(getDebugMode() & btIDebugDraw::DBG_DisableBulletLCP);
+				//bool useCCD = (getDebugMode() & btIDebugDraw::DBG_EnableCCD);
+				//glRasterPos3f(xOffset,yStart,0);
+				//sprintf(buf,"1 CCD mode (adhoc) = %i",useCCD);
+				//BMF_DrawString(BMF_GetFont(BMF_kHelvetica10),buf);
+				//yStart += yIncr;
+
+				//glRasterPos3f(xOffset, yStart, 0);
+				//buf = String.format(%10.2f", ShootBoxInitialSpeed);
+				buf.setLength(0);
+				buf.append("+- shooting speed = ");
+				FastFormat.append(buf, ShootBoxInitialSpeed);
+				drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				yStart += yIncr;
+
+				//#ifdef SHOW_NUM_DEEP_PENETRATIONS
+				/*
+				buf.setLength(0);
+				buf.append("gNumDeepPenetrationChecks = ");
+				FastFormat.append(buf, BulletStats.gNumDeepPenetrationChecks);
+				drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				yStart += yIncr;
+
+				buf.setLength(0);
+				buf.append("gNumGjkChecks = ");
+				FastFormat.append(buf, BulletStats.gNumGjkChecks);
+				drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				yStart += yIncr;
+
+				buf.setLength(0);
+				buf.append("gNumSplitImpulseRecoveries = ");
+				FastFormat.append(buf, BulletStats.gNumSplitImpulseRecoveries);
+				drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				yStart += yIncr;
+				*/
+				
+				//buf = String.format("gNumAlignedAllocs = %d", BulletGlobals.gNumAlignedAllocs);
+				// TODO: BMF_DrawString(BMF_GetFont(BMF_kHelvetica10),buf);
+				//yStart += yIncr;
+
+				//buf = String.format("gNumAlignedFree= %d", BulletGlobals.gNumAlignedFree);
+				// TODO: BMF_DrawString(BMF_GetFont(BMF_kHelvetica10),buf);
+				//yStart += yIncr;
+
+				//buf = String.format("# alloc-free = %d", BulletGlobals.gNumAlignedAllocs - BulletGlobals.gNumAlignedFree);
+				// TODO: BMF_DrawString(BMF_GetFont(BMF_kHelvetica10),buf);
+				//yStart += yIncr;
+
+				//enable BT_DEBUG_MEMORY_ALLOCATIONS define in Bullet/src/LinearMath/btAlignedAllocator.h for memory leak detection
+				//#ifdef BT_DEBUG_MEMORY_ALLOCATIONS
+				//glRasterPos3f(xOffset,yStart,0);
+				//sprintf(buf,"gTotalBytesAlignedAllocs = %d",gTotalBytesAlignedAllocs);
+				//BMF_DrawString(BMF_GetFont(BMF_kHelvetica10),buf);
+				//yStart += yIncr;
+				//#endif //BT_DEBUG_MEMORY_ALLOCATIONS
+
+				if (getDynamicsWorld() != null) {
+					buf.setLength(0);
+					buf.append("# objects = ");
+					FastFormat.append(buf, getDynamicsWorld().getNumCollisionObjects());
+					drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+					yStart += yIncr;
+					
+					buf.setLength(0);
+					buf.append("# pairs = ");
+					FastFormat.append(buf, getDynamicsWorld().getBroadphase().getOverlappingPairCache().getNumOverlappingPairs());
+					drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+					yStart += yIncr;
+
+				}
+				//#endif //SHOW_NUM_DEEP_PENETRATIONS
+
+				// JAVA NOTE: added
+				int free = (int)Runtime.getRuntime().freeMemory();
+				int total = (int)Runtime.getRuntime().totalMemory();
+				buf.setLength(0);
+				buf.append("heap = ");
+				FastFormat.append(buf, (float)(total - free) / (1024*1024));
+				buf.append(" / ");
+				FastFormat.append(buf, (float)(total) / (1024*1024));
+				buf.append(" MB");
+				drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				yStart += yIncr;
+				
+				resetPerspectiveProjection();
+			}
+
+			gl.glEnable(GL_LIGHTING);
+		}
+		
+		updateCamera();
+	}
+	
+
+	public void addBioObject(CMBioObj obj){
+		//This method adds a wall to the container
+		modelObjects.add(obj);
+		collisionShapes.add(obj.getCollisionShape());
+		dynamicsWorld.addRigidBody(obj.getRigidBody());
+	}
+	
+	public float nextRandomF(){
+		return random.nextFloat();
+	}
+	
+	public static void main(String[] args) throws LWJGLException {
+		CMSimulation sim = new CMSimulation(LWJGL.getGL());
+		sim.initPhysics();
+		sim.getDynamicsWorld().setDebugDrawer(new GLDebugDrawer(LWJGL.getGL()));
+
+		LWJGL.main(args, 800, 600, "Cell Simulation", sim);
+	}
+	
+}
