@@ -1,4 +1,4 @@
-/* This is an extention of the jbullet basic demo
+/** This is an extention of the jbullet basic demo
  * designed to model cellular migration of retinal progenitor cells
  * 
  * 
@@ -20,6 +20,20 @@
  * 2. Altered source versions must be plainly marked as such, and must not be
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
+ * 
+ *  Copyright (C) 2013 Terri A. Grosso
+ *
+ *   Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ *
+ *   The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ *
+ *   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * 
+ * 
+ * Terri A. Grosso
+ * Package: cellModel
+ * File: CMSimulation.java
+ * Apr 10, 2013 1:44:54 PM
  */
 
 package cellModel;
@@ -69,7 +83,7 @@ public class CMSimulation extends DemoApplication {
 	private static float wallThick = 2f;
 	private static float meshThick = 6f;
 	private static float pore_density = 100000;
-	private static float pore_diameter = 14; //Actually 8 but need room for 10micrometer cells
+	private static float pore_diameter = 12; //Actually 8 but need room for 10micrometer cells
 	private static float well_depth = 40;
 	private static float inset_depth = 60;
 	private static Vector3f testTubeSize = new Vector3f(80f, well_depth + inset_depth + meshThick, 80f);
@@ -167,7 +181,7 @@ public class CMSimulation extends DemoApplication {
 		addBioObject(front);
 
 		addMesh(testTubeSize.x, testTubeSize.z, meshThick, pore_density, pore_diameter, well_depth);
-		
+		addBioObject(new CMCell(this, new Vector3f(0f, 0f, 0f)));
 		
 		CMMolecule.fillSpace(this, NUM_MOLECULES, new Vector3f(-testTubeSize.x/2, -testTubeSize.y/2, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2, well_depth-testTubeSize.y/2, testTubeSize.z/2));
 
@@ -178,7 +192,7 @@ public class CMSimulation extends DemoApplication {
 	public void myinit(){
 		super.myinit();
 		//gl.glClearColor(0f, 0f, 0f, 1f);
-		setCameraDistance(80);
+		setCameraDistance(90);
 		updateCamera();
 	}
 	
@@ -238,88 +252,17 @@ public class CMSimulation extends DemoApplication {
 				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
 				yStart += yIncr;
 
-				//s = ". to shoot box or trimesh (MovingConcaveDemo)";
-				//drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				//yStart += yIncr;
-
-				// not yet hooked up again after refactoring...
-
-				//s = "d to toggle deactivation";
-				//drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				//yStart += yIncr;
-
-				//s = "g to toggle mesh animation (ConcaveDemo)";
-				//drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				//yStart += yIncr;
-
-				// JAVA NOTE: added
-				//s = "e to spawn new body (GenericJointDemo)";
-				//drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				//yStart += yIncr;
-
 				s = "h to toggle help text";
 				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
 				yStart += yIncr;
-
-				//buf = "p to toggle profiling (+results to file)";
-				//drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
 				yStart += yIncr;
+				
 
-				//bool useBulletLCP = !(getDebugMode() & btIDebugDraw::DBG_DisableBulletLCP);
-				//bool useCCD = (getDebugMode() & btIDebugDraw::DBG_EnableCCD);
-				//glRasterPos3f(xOffset,yStart,0);
-				//sprintf(buf,"1 CCD mode (adhoc) = %i",useCCD);
-				//BMF_DrawString(BMF_GetFont(BMF_kHelvetica10),buf);
-				//yStart += yIncr;
-
-				//glRasterPos3f(xOffset, yStart, 0);
-				//buf = String.format(%10.2f", ShootBoxInitialSpeed);
 				buf.setLength(0);
 				buf.append("+- shooting speed = ");
 				FastFormat.append(buf, ShootBoxInitialSpeed);
 				drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
 				yStart += yIncr;
-
-				//#ifdef SHOW_NUM_DEEP_PENETRATIONS
-				/*
-				buf.setLength(0);
-				buf.append("gNumDeepPenetrationChecks = ");
-				FastFormat.append(buf, BulletStats.gNumDeepPenetrationChecks);
-				drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				yStart += yIncr;
-
-				buf.setLength(0);
-				buf.append("gNumGjkChecks = ");
-				FastFormat.append(buf, BulletStats.gNumGjkChecks);
-				drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				yStart += yIncr;
-
-				buf.setLength(0);
-				buf.append("gNumSplitImpulseRecoveries = ");
-				FastFormat.append(buf, BulletStats.gNumSplitImpulseRecoveries);
-				drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				yStart += yIncr;
-				*/
-				
-				//buf = String.format("gNumAlignedAllocs = %d", BulletGlobals.gNumAlignedAllocs);
-				// TODO: BMF_DrawString(BMF_GetFont(BMF_kHelvetica10),buf);
-				//yStart += yIncr;
-
-				//buf = String.format("gNumAlignedFree= %d", BulletGlobals.gNumAlignedFree);
-				// TODO: BMF_DrawString(BMF_GetFont(BMF_kHelvetica10),buf);
-				//yStart += yIncr;
-
-				//buf = String.format("# alloc-free = %d", BulletGlobals.gNumAlignedAllocs - BulletGlobals.gNumAlignedFree);
-				// TODO: BMF_DrawString(BMF_GetFont(BMF_kHelvetica10),buf);
-				//yStart += yIncr;
-
-				//enable BT_DEBUG_MEMORY_ALLOCATIONS define in Bullet/src/LinearMath/btAlignedAllocator.h for memory leak detection
-				//#ifdef BT_DEBUG_MEMORY_ALLOCATIONS
-				//glRasterPos3f(xOffset,yStart,0);
-				//sprintf(buf,"gTotalBytesAlignedAllocs = %d",gTotalBytesAlignedAllocs);
-				//BMF_DrawString(BMF_GetFont(BMF_kHelvetica10),buf);
-				//yStart += yIncr;
-				//#endif //BT_DEBUG_MEMORY_ALLOCATIONS
 
 				if (getDynamicsWorld() != null) {
 					buf.setLength(0);
@@ -335,7 +278,6 @@ public class CMSimulation extends DemoApplication {
 					yStart += yIncr;
 
 				}
-				//#endif //SHOW_NUM_DEEP_PENETRATIONS
 
 				// JAVA NOTE: added
 				int free = (int)Runtime.getRuntime().freeMemory();
