@@ -29,4 +29,5 @@ public interface CMBioObj {
 	public Vector3f getColor3Vector();
 	public void setVisible(boolean v);
 	public boolean isVisible();
+	public void collided(CMBioObj c);
 }

@@ -69,19 +69,19 @@ import java.util.Random;
  * 
  * @author jezek2
  */
-public class CMSimulation extends DemoApplication {
+public class CMSimulation extends DemoApplication{
 
 
 	// maximum number of objects (test tube walls and apparatus, molecules and cells)
 	private static final int NUM_WALLS = 6;
 	private static final int NUM_MESH_BOXES = 100;
-	private static final int NUM_MOLECULES = 1000;
-	private static final int NUM_CELLS = 100;
+	private static final int NUM_MOLECULES = 2000;
+	private static final int NUM_CELLS = 50;
 	private static final int MAX_PROXIES = NUM_WALLS + NUM_MESH_BOXES + NUM_MOLECULES + NUM_CELLS;
 	
 	
 	private static float wallThick = 2f;
-	private static float meshThick = 6f;
+	private static float meshThick = 10f; //The mesh is 10 microns thick
 	private static float pore_density = 100000;
 	private static float pore_diameter = 12; //Actually 8 but need room for 10micrometer cells
 	private static float well_depth = 40;
@@ -127,6 +127,8 @@ public class CMSimulation extends DemoApplication {
 			dynamicsWorld.stepSimulation(ms / 1000000f);
 			// optional but useful: debug drawing
 			dynamicsWorld.debugDrawWorld();
+			
+			//Detect and take care of collisions
 		}
 
 		renderme();
@@ -181,6 +183,7 @@ public class CMSimulation extends DemoApplication {
 		addBioObject(front);
 
 		addMesh(testTubeSize.x, testTubeSize.z, meshThick, pore_density, pore_diameter, well_depth);
+		CMCell.fillSpace(this, NUM_CELLS, new Vector3f(-testTubeSize.x/2,-testTubeSize.y/2 + well_depth + meshThick, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2,testTubeSize.y/2, testTubeSize.z/2));
 		addBioObject(new CMCell(this, new Vector3f(0f, 0f, 0f)));
 		
 		CMMolecule.fillSpace(this, NUM_MOLECULES, new Vector3f(-testTubeSize.x/2, -testTubeSize.y/2, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2, well_depth-testTubeSize.y/2, testTubeSize.z/2));
@@ -258,11 +261,11 @@ public class CMSimulation extends DemoApplication {
 				yStart += yIncr;
 				
 
-				buf.setLength(0);
-				buf.append("+- shooting speed = ");
-				FastFormat.append(buf, ShootBoxInitialSpeed);
-				drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				yStart += yIncr;
+				//buf.setLength(0);
+				//buf.append("+- shooting speed = ");
+				//FastFormat.append(buf, ShootBoxInitialSpeed);
+				//drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+				//yStart += yIncr;
 
 				if (getDynamicsWorld() != null) {
 					buf.setLength(0);

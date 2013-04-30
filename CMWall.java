@@ -97,4 +97,9 @@ public class CMWall implements CMBioObj{
 	public boolean isVisible(){
 		return visible;
 	}
+	
+	public void collided(CMBioObj c){
+		//Do nothing for now
+		//TODO - Implement joints with cells
+	}
 }

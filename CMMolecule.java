@@ -127,6 +127,11 @@ public class CMMolecule implements CMBioObj{
 		return visible;
 	}
 	
+	public void collided(CMBioObj c){
+		//Do nothing for now.  Molecules don't do anything when they collide
+		//TODO - Should molecules be removed from the simulation when they collide with cells?
+	}
+	
 	public String toString(){
 		String s = "I am molecule " + this.id;
 		return s;
