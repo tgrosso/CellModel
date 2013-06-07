@@ -21,6 +21,7 @@ import com.bulletphysics.collision.shapes.CollisionShape;
 import javax.vecmath.Vector3f;
 import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.linearmath.Transform;
+import com.bulletphysics.util.ObjectArrayList;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
 import org.lwjgl.BufferUtils;
@@ -40,7 +41,8 @@ public class CMMolecule implements CMBioObj{
 	private int id;
 	private Vector3f origin;
 	private static SphereShape molShape = new SphereShape(radius);
-	private RigidBody body;
+	private CMRigidBody body;
+	private Transform trans;
 	private static Sphere drawSphere = new Sphere();
 	private static float[] molColor = {1.0f, 1.0f, 0.0f, 1.0f};
 	protected float cameraDistance = 20f;
@@ -49,16 +51,16 @@ public class CMMolecule implements CMBioObj{
 	public CMMolecule(CMSimulation sim, Vector3f o){
 		this.origin = o;
 		
-		Transform t = new Transform();
-		t.setIdentity();
-		t.origin.set(origin);
+		trans = new Transform();
+		trans.setIdentity();
+		trans.origin.set(origin);
 		
 		Vector3f localInertia = new Vector3f(0, 0, 0);
 		molShape.calculateLocalInertia(mass, localInertia);
 
-		DefaultMotionState motionState = new DefaultMotionState(t);
+		DefaultMotionState motionState = new DefaultMotionState(trans);
 		RigidBodyConstructionInfo rbInfo = new RigidBodyConstructionInfo(mass, motionState, molShape, localInertia);
-		body = new RigidBody(rbInfo);
+		body = new CMRigidBody(rbInfo, this);
 		float magnitude = sim.nextRandomF() * maxVelChange;
 		float hor_angle = sim.nextRandomF() * 360;
 		float ver_angle = sim.nextRandomF() * 360;
@@ -74,10 +76,11 @@ public class CMMolecule implements CMBioObj{
 	}
 	
 	
-	public static void fillSpace(CMSimulation sim, int numMol, Vector3f minP, Vector3f maxP){
+	public static CMBioObjGroup fillSpace(CMSimulation sim, int numMol, Vector3f minP, Vector3f maxP, String name){
 		//Will randomly spread the molecules throughout the space
 		//System.out.println(minP.x + ", " + minP.y + ", " + minP.z);
 		//System.out.println(maxP.x + ", " + maxP.y + ", " + maxP.z);
+		CMBioObjGroup molecules = new CMBioObjGroup(sim, name);
 		
 		float x_len = maxP.x - minP.x;
 		float y_len = maxP.y - minP.y;
@@ -87,9 +90,10 @@ public class CMMolecule implements CMBioObj{
 			float randX = x_len * sim.nextRandomF();
 			float randY = y_len * sim.nextRandomF();
 			float randZ = z_len * sim.nextRandomF();
-			sim.addBioObject(new CMMolecule(sim, new Vector3f(randX+minP.x, randY+minP.y, randZ+minP.z)));
+			CMMolecule newMol = new CMMolecule(sim, new Vector3f(randX+minP.x, randY+minP.y, randZ+minP.z));
+			molecules.addObject(newMol);
 		}
-		
+		return molecules;
 	}
 	
 	public CollisionShape getCollisionShape(){
@@ -127,13 +131,44 @@ public class CMMolecule implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c){
+	public void collided(CMBioObj c, Vector3f v){
 		//Do nothing for now.  Molecules don't do anything when they collide
 		//TODO - Should molecules be removed from the simulation when they collide with cells?
+		//System.out.println("Me: " + this.toString() + " It: " + c);
 	}
+	
+	/*public String getCsvData(){
+		//Find position
+		this.body.getMotionState().getWorldTransform(trans);
+		
+		String s = "Molecule." + this.id + "," + trans.origin.x + ","  + trans.origin.y + "," + trans.origin.z + "\n";
+		return s;
+	}
+	*/
 	
 	public String toString(){
 		String s = "I am molecule " + this.id;
 		return s;
+	}
+	
+	public int getID(){
+		return this.id;
+	}
+	
+	public String getType(){
+		String s = "Molecule";
+		return s;
+	}
+	
+	public float getMass(){
+		return mass;
+	}
+	
+	public void addConstraint(CMGenericConstraint c){
+		
+	}
+	
+	public void removeConstraint(CMGenericConstraint c){
+		
 	}
 }

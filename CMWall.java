@@ -22,6 +22,7 @@ import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.linearmath.Transform;
 import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
+import com.bulletphysics.util.ObjectArrayList;
 
 import java.nio.FloatBuffer;
 import java.util.Random;
@@ -32,13 +33,15 @@ import org.lwjgl.opengl.GL11;
 
 
 public class CMWall implements CMBioObj{
-	private RigidBody body;
+	private static int wall_ids = 0;
+	private CMRigidBody body;
 	private BoxShape wallShape;
 	private Vector3f origin;
 	private float[] wallColor = {.4f, 0.2f, 0.2f, 1f};
 	private float width, height, depth;
 	private static FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
 	private boolean visible = true;
+	private int id;
 	
 	public CMWall(float w, float h, float d, Vector3f o){
 		float mass = 0;
@@ -54,8 +57,10 @@ public class CMWall implements CMBioObj{
 		wallShape = new BoxShape(new Vector3f(width/2, height/2, depth/2));
 		DefaultMotionState motionState = new DefaultMotionState(t);
 		RigidBodyConstructionInfo rbInfo = new RigidBodyConstructionInfo(mass, motionState, wallShape, localInertia);
-		body = new RigidBody(rbInfo);
+		body = new CMRigidBody(rbInfo, this);
 		
+		this.id = wall_ids;
+		wall_ids++;
 		//Vector3f minAABB = new Vector3f(0,0,0);
 		//Vector3f maxAABB = new Vector3f(0,0,0);
 		//body.getAabb(minAABB, maxAABB);
@@ -90,6 +95,10 @@ public class CMWall implements CMBioObj{
 		wallColor[3] = alpha;
 	}
 	
+	public String toString(){
+		return ("I am a wall!");
+	}
+	
 	public void setVisible(boolean v){
 		visible = v;
 	}
@@ -98,8 +107,30 @@ public class CMWall implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c){
+	public void collided(CMBioObj c, Vector3f v){
 		//Do nothing for now
 		//TODO - Implement joints with cells
+		//System.out.println("Me: " + this.toString() + " It: " + c);
+	}
+	
+	public int getID(){
+		return this.id;
+	}
+	
+	public String getType(){
+		String s = "Wall";
+		return s;
+	}
+	
+	public float getMass(){
+		return (0.0f);
+	}
+	
+	public void addConstraint(CMGenericConstraint c){
+		
+	}
+	
+	public void removeConstraint(CMGenericConstraint c){
+		
 	}
 }

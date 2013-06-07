@@ -30,7 +30,7 @@
  *   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * 
  * 
- * Terri A. Grosso
+ * Terri A. Grosso, Naralys Batista, Nancy Griffeth
  * Package: cellModel
  * File: CMSimulation.java
  * Apr 10, 2013 1:44:54 PM
@@ -43,6 +43,8 @@ import com.bulletphysics.collision.broadphase.BroadphaseInterface;
 import com.bulletphysics.collision.broadphase.DbvtBroadphase;
 import com.bulletphysics.collision.dispatch.CollisionDispatcher;
 import com.bulletphysics.collision.dispatch.DefaultCollisionConfiguration;
+import com.bulletphysics.collision.narrowphase.PersistentManifold;
+import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.BoxShape;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.demos.opengl.DemoApplication;
@@ -53,7 +55,6 @@ import com.bulletphysics.demos.opengl.GLShapeDrawer;
 import com.bulletphysics.demos.opengl.FastFormat;
 import com.bulletphysics.dynamics.DiscreteDynamicsWorld;
 import com.bulletphysics.dynamics.RigidBody;
-import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
 import com.bulletphysics.dynamics.constraintsolver.ConstraintSolver;
 import com.bulletphysics.dynamics.constraintsolver.SequentialImpulseConstraintSolver;
 import com.bulletphysics.linearmath.DefaultMotionState;
@@ -63,6 +64,13 @@ import javax.vecmath.Vector3f;
 import org.lwjgl.LWJGLException;
 import static com.bulletphysics.demos.opengl.IGL.*;
 import java.util.Random;
+import java.util.TimeZone;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.File;
 
 /**
  * BasicDemo is good starting point for learning the code base and porting.
@@ -75,35 +83,62 @@ public class CMSimulation extends DemoApplication{
 	// maximum number of objects (test tube walls and apparatus, molecules and cells)
 	private static final int NUM_WALLS = 6;
 	private static final int NUM_MESH_BOXES = 100;
-	private static final int NUM_MOLECULES = 2000;
-	private static final int NUM_CELLS = 50;
+	private static final int NUM_MOLECULES = 10;
+	private static final int NUM_CELLS = 10;
 	private static final int MAX_PROXIES = NUM_WALLS + NUM_MESH_BOXES + NUM_MOLECULES + NUM_CELLS;
 	
 	
 	private static float wallThick = 2f;
 	private static float meshThick = 10f; //The mesh is 10 microns thick
 	private static float pore_density = 100000;
-	private static float pore_diameter = 12; //Actually 8 but need room for 10micrometer cells
+	private static float pore_diameter = 11; //Actually 8 but need room for 10micrometer cells
 	private static float well_depth = 40;
 	private static float inset_depth = 60;
 	private static Vector3f testTubeSize = new Vector3f(80f, well_depth + inset_depth + meshThick, 80f);
 	
 	private StringBuilder buf;
 	
-	
-	// keep the collision shapes, for deletion/cleanup
-	private ObjectArrayList<CollisionShape> collisionShapes = new ObjectArrayList<CollisionShape>();
 	private ObjectArrayList<CMBioObj> modelObjects = new ObjectArrayList<CMBioObj>();
+	private ObjectArrayList<CMBioObjGroup> objectGroups = new ObjectArrayList<CMBioObjGroup>();
 	private BroadphaseInterface broadphase;
 	private CollisionDispatcher dispatcher;
 	private ConstraintSolver solver;
 	private DefaultCollisionConfiguration collisionConfiguration;
 	private Random random;
+	private double summaryDelay = 500; //Minimum number of milliseconds between summary reports
+	private long startTime, currentTime, lastWriteTime;
+	private File dataDir = null;
+	private BufferedWriter initFile = null, summaryFile = null, positionFile = null;
+	SimpleDateFormat summaryFormat = new SimpleDateFormat("HH:mm:ss:SSS");
 	
 	public CMSimulation(IGL gl, long seed){
 		super(gl);
 		random = new Random(seed);
 		buf = new StringBuilder();
+
+		SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
+	    Date now = new Date();
+	    String dateString = df.format(now);
+		
+		try {
+				dataDir = new File("CM-" + dateString);
+				dataDir.mkdir();
+				if (dataDir != null){
+					summaryFile = new BufferedWriter(new FileWriter("CM-" + dateString + "/summary.csv"));
+					summaryFile.write("Time Since Sim Start\tGroup Name\tCenter of Mass\tNumber Below Mesh");
+					summaryFile.newLine();
+					positionFile = new BufferedWriter(new FileWriter("CM-" + dateString + "/positions.csv"));
+					positionFile.write("Time Since Sim Start\tType\tID\tCOM\tAABBMin\tAABBMax");
+					positionFile.newLine();
+				}
+	            
+		} catch (IOException e) {
+	        	System.out.println("Cannot generate output files!");
+	        	System.out.println("IOException: " + e.toString());
+		}
+		startTime = clock.getTimeMicroseconds(); //clock is inherited from DemoApplication
+		lastWriteTime = startTime;
+		summaryFormat.setTimeZone(TimeZone.getTimeZone("GMT")); //To get the right time formats, need Grenwhich Mean Time
 	}
 	
 	public CMSimulation(IGL gl) {
@@ -112,6 +147,11 @@ public class CMSimulation extends DemoApplication{
 	
 	@Override
 	public void clientMoveAndDisplay() {
+		if (lastWriteTime == startTime){
+			outputSummary();
+			outputPositions();
+		}
+		
 		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		int numObjects = modelObjects.size();
 		for (int i = 0; i < numObjects; i++){
@@ -120,18 +160,45 @@ public class CMSimulation extends DemoApplication{
 		}
 
 		// simple dynamics world doesn't handle fixed-time-stepping
-		float ms = getDeltaTimeMicroseconds();
+		float deltaTime = clock.getTimeMicroseconds() - currentTime;
+		currentTime = clock.getTimeMicroseconds();
 
 		// step the simulation
 		if (dynamicsWorld != null) {
-			dynamicsWorld.stepSimulation(ms / 1000000f);
+			dynamicsWorld.stepSimulation(deltaTime / 1000000f);
 			// optional but useful: debug drawing
 			dynamicsWorld.debugDrawWorld();
 			
 			//Detect and take care of collisions
+			
+			int numManifolds = dynamicsWorld.getDispatcher().getNumManifolds();
+			for (int i=0;i<numManifolds;i++){
+				PersistentManifold contactManifold =  dynamicsWorld.getDispatcher().getManifoldByIndexInternal(i);
+				CMRigidBody objA = (CMRigidBody)contactManifold.getBody0();
+				CMRigidBody objB = (CMRigidBody)contactManifold.getBody1();
+				//System.out.println("A " + objA + " B: " + objB);
+			
+				int numContacts = contactManifold.getNumContacts();
+				for (int j=0; j<numContacts; j++){
+					ManifoldPoint pt = contactManifold.getContactPoint(j);
+					if (pt.getDistance()<0f){
+						Vector3f ptA = new Vector3f(0f, 0f, 0f);
+						ptA = pt.getPositionWorldOnA(ptA);
+						Vector3f ptB = new Vector3f(0f, 0f, 0f);
+						ptB = pt.getPositionWorldOnB(ptB);
+						objA.getParent().collided(objB.getParent(), ptA);
+						objB.getParent().collided(objA.getParent(), ptB);
+						
+					}
+				}
+			}
 		}
-
 		renderme();
+		if ((currentTime - lastWriteTime)/1000.0 > summaryDelay){
+			outputSummary();
+			outputPositions();
+			lastWriteTime = currentTime;
+		}
 
 		//glFlush();
 		//glutSwapBuffers();
@@ -147,13 +214,10 @@ public class CMSimulation extends DemoApplication{
 		if (dynamicsWorld != null) {
 			dynamicsWorld.debugDrawWorld();
 		}
-
-		//glFlush();
-		//glutSwapBuffers();
 	}
 
 	public void initPhysics() {
-		setCameraDistance(50f);
+		//setCameraDistance(50f);
 
 		// collision configuration contains default setup for memory, collision setup
 		collisionConfiguration = new DefaultCollisionConfiguration();
@@ -172,21 +236,19 @@ public class CMSimulation extends DemoApplication{
 		//Simulation takes place in fluid.  For now, no gravity
 		dynamicsWorld.setGravity(new Vector3f(0f, 0f, 0f));
 
-		addBioObject(new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, -testTubeSize.y/2, 0f)));
-		addBioObject(new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, testTubeSize.y/2, 0f)));
-		addBioObject(new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f(-testTubeSize.x/2, 0f, 0f)));
-		addBioObject(new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f(testTubeSize.x/2, 0f, 0f)));
-		addBioObject(new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, testTubeSize.z/2)));
+		addBioObject(new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, -testTubeSize.y/2, 0f)));//bottom
+		addBioObject(new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, testTubeSize.y/2, 0f)));//top
+		addBioObject(new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f(-testTubeSize.x/2, 0f, 0f)));//left
+		addBioObject(new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f(testTubeSize.x/2, 0f, 0f)));//right
+		addBioObject(new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, testTubeSize.z/2)));//back
 		
 		CMWall front = new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, -testTubeSize.z/2));
 		front.setVisible(false);
 		addBioObject(front);
 
 		addMesh(testTubeSize.x, testTubeSize.z, meshThick, pore_density, pore_diameter, well_depth);
-		CMCell.fillSpace(this, NUM_CELLS, new Vector3f(-testTubeSize.x/2,-testTubeSize.y/2 + well_depth + meshThick, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2,testTubeSize.y/2, testTubeSize.z/2));
-		addBioObject(new CMCell(this, new Vector3f(0f, 0f, 0f)));
-		
-		CMMolecule.fillSpace(this, NUM_MOLECULES, new Vector3f(-testTubeSize.x/2, -testTubeSize.y/2, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2, well_depth-testTubeSize.y/2, testTubeSize.z/2));
+		objectGroups.add(CMCell.fillSpace(this, NUM_CELLS, new Vector3f(-testTubeSize.x/2,-testTubeSize.y/2 + well_depth + meshThick, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2,testTubeSize.y/2, testTubeSize.z/2), "RPCs"));
+		objectGroups.add(CMMolecule.fillSpace(this, NUM_MOLECULES, new Vector3f(-testTubeSize.x/2, -testTubeSize.y/2, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2, well_depth-testTubeSize.y/2, testTubeSize.z/2), "Netrin"));
 
 		clientResetScene();
 	}
@@ -198,7 +260,6 @@ public class CMSimulation extends DemoApplication{
 		setCameraDistance(90);
 		updateCamera();
 	}
-	
 	
 	@Override
 	public void renderme() {
@@ -300,7 +361,7 @@ public class CMSimulation extends DemoApplication{
 			gl.glEnable(GL_LIGHTING);
 		}
 		
-		updateCamera();
+		//updateCamera();
 	}
 	
 	public void addMesh(float width, float depth, float thickness, float p_density, float p_diameter, float height){
@@ -352,7 +413,6 @@ public class CMSimulation extends DemoApplication{
 	public void addBioObject(CMBioObj obj){
 		//This method adds a wall to the container
 		modelObjects.add(obj);
-		collisionShapes.add(obj.getCollisionShape());
 		dynamicsWorld.addRigidBody(obj.getRigidBody());
 	}
 	
@@ -360,12 +420,79 @@ public class CMSimulation extends DemoApplication{
 		return random.nextFloat();
 	}
 	
+	public void outputSummary(){
+		long nowTimeMS = clock.getTimeMilliseconds()- (startTime/1000);
+		Date nowTime = new Date(nowTimeMS);
+		String nowString = summaryFormat.format(nowTime);
+		
+		int numGroups = objectGroups.size();
+		
+		for (int i = 0; i < numGroups; i++){
+			CMBioObjGroup group = (CMBioObjGroup)objectGroups.getQuick(i);
+			String groupName = group.getName();
+			Vector3f groupCOM = group.getCenterOfMass();
+			int numBelowMesh = group.getNumObjectsBelow(-testTubeSize.y/2 + well_depth);
+			try{
+				summaryFile.write(nowString + "\t" + groupName + "\t" + groupCOM.toString() + "\t" + numBelowMesh);
+				summaryFile.newLine();
+			}
+			catch(IOException e){
+				System.out.println("Error writing data to summary file.");
+				System.out.println(e.toString());
+			}
+		}
+	}
+	
+	public void outputPositions(){
+		long nowTimeMS = clock.getTimeMilliseconds()- (startTime/1000);
+		Date nowTime = new Date(nowTimeMS);
+		String nowString = summaryFormat.format(nowTime);
+		Vector3f min = new Vector3f();
+		Vector3f max = new Vector3f();
+		Vector3f com = new Vector3f();
+		
+		int numObjects = modelObjects.size();
+		for (int i = 0; i < numObjects; i++){
+			CMBioObj bioObj = modelObjects.getQuick(i);
+			if (bioObj.getMass() == 0){
+				continue;
+			}
+			RigidBody rb = bioObj.getRigidBody();
+			min.set(0,0,0);
+			max.set(0,0,0);
+			com.set(0,0,0);
+			rb.getAabb(min, max);
+			rb.getCenterOfMassPosition(com);
+			try{
+				positionFile.write(nowString + "\t" + bioObj.getType() + "\t" + bioObj.getID() + "\t" + com + "\t" + min + "\t" + max);
+				positionFile.newLine();
+			}
+			catch(IOException e){
+				System.out.println("Cannot write to position file");
+				System.out.println(e.toString());
+			}
+		}
+	}
+	
+	public void wrapUp(){
+		try{
+			summaryFile.flush();
+			summaryFile.close();
+			positionFile.flush();
+			positionFile.close();
+		}
+		catch(IOException e){
+			System.out.println("Unable to close summary file");
+			System.out.println(e.toString());
+		}
+	}
+	
 	public static void main(String[] args) throws LWJGLException {
 		CMSimulation sim = new CMSimulation(LWJGL.getGL());
 		sim.initPhysics();
 		sim.getDynamicsWorld().setDebugDrawer(new GLDebugDrawer(LWJGL.getGL()));
 
-		LWJGL.main(args, 800, 600, "Cell Simulation", sim);
+		CMLWJGL.main(args, 800, 600, "Cell Simulation", sim);
 	}
 	
 }

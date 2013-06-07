@@ -46,18 +46,3 @@ Model cells reacting to collisions with molecules
 
 		Sections activated by chemoattractant are more likely to apply a force.
 
-Model rafts of receptors
-
-	Small flat areas on the surface of the cell
-
-	Rafts are held on with a strong force directed towards the center of the appropriate cell
-
-	Rafts move towards the most activated raft (?)
-
-	Being hit by a molecule increases the activity of the raft
-
-		Do rafts apply forces to the cell to guide its motion?
-
-		Does the activity of the raft affect the probability of moving in a particular direction?
-
-		An activated raft is more likely to bind to a molecule.
