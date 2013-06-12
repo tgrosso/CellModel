@@ -35,6 +35,10 @@ public class CMBioObjGroup {
 		objList.add(c);
 	}
 	
+	public CMBioObj getObject(int index){
+		return objList.getQuick(index);
+	}
+	
 	public boolean removeObject(CMBioObj c){
 		int index = objList.indexOf(c);
 		if (index < 0){
@@ -51,15 +55,15 @@ public class CMBioObjGroup {
 	public Vector3f getCenterOfMass(){
 		float mass = 0;
 		int num = objList.size();
-		Transform trans = new Transform();
-		Vector3f center = new Vector3f();
+		Vector3f com = new Vector3f();
+		Vector3f center = new Vector3f(0,0,0);
 		for (int i = 0; i < num; i++){
 			CMBioObj o = objList.getQuick(i);
+			com.set(0,0,0);
 			mass += o.getMass();
-			o.getRigidBody().getMotionState().getWorldTransform(trans);			
-			Vector3f c = trans.origin;
-			c.scale(o.getMass());
-			center.add(c);
+			o.getRigidBody().getCenterOfMassPosition(com);		
+			com.scale(o.getMass());
+			center.add(com);
 		}
 		center.scale((float)(1.0/mass));
 		return center;
@@ -76,7 +80,7 @@ public class CMBioObjGroup {
 			max.set(0,0,0);
 			rb.getAabb(min, max);
 			if (max.y < y_value && min.y < y_value && groupName == "RPCs"){
-				System.out.println(max.toString());
+				//System.out.println(max.toString());
 				numBelow++;
 			}
 		}

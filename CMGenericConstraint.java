@@ -61,9 +61,9 @@ public class CMGenericConstraint extends Generic6DofConstraint{ // implements CM
 	//updating time to see if constraint continues or is broken in next time step
 	public void updateTime(Date currentTime){
 	
-		if (currentTime - initialTime > life){//how to subtract date.util time?**
-			isActive = false;
-		}
+		//if (currentTime - initialTime > life){//how to subtract date.util time?**
+			//isActive = false;
+		//}
 		
 	}
 	

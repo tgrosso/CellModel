@@ -36,7 +36,7 @@ import org.lwjgl.util.glu.Sphere;
 public class CMMolecule implements CMBioObj{
 	private static float radius = .1f;
 	private static float mass = (float)(4.0/3.0 * Math.PI * radius * radius * radius); //assume density of 1 g/cm3
-	private static float maxVelChange = .5f;
+	private static float maxVelChange = .2f;
 	private static int mol_ids = 0;
 	private int id;
 	private Vector3f origin;

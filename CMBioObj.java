@@ -25,6 +25,7 @@ import javax.vecmath.Vector3f;
 
 
 public interface CMBioObj {
+	
 	public CollisionShape getCollisionShape();
 	public RigidBody getRigidBody();
 	public void updateObject(Random r);

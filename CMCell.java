@@ -30,12 +30,14 @@ import com.bulletphysics.util.ObjectArrayList;
 
 
 public class CMCell implements CMBioObj{
+	final private static int NO_RESPONSE = 1, UNIFORM_RESPONSE = 2, OCTANT_RESPONSE = 3, RECEPTOR_RAFTS = 4;
 	private static float radius = 5.0f;
 	private static float density = 1.2f;
 	private static float volume = (float)(4.0/3.0 * Math.PI * radius * radius * radius);
 	private static float mass = density * volume;
 	private static float maxVelChange = 0.5f;
 	private static int cell_ids = 0;
+	private int molResponse = NO_RESPONSE;
 	private int id;
 	private Vector3f origin;
 	private static SphereShape cellShape = new SphereShape(radius);
@@ -46,6 +48,9 @@ public class CMCell implements CMBioObj{
 	protected float cameraDistance = 20f;
 	private boolean visible = true;
 	private CMSimulation sim;
+	private static float responseDeltaVel = 0.1f;
+	private CMBioObjGroup rafts;
+	private int numRafts = 0;
 	private String objectType = "Cell";
 	
 	public CMCell(CMSimulation s, Vector3f o){
@@ -81,6 +86,17 @@ public class CMCell implements CMBioObj{
 		
 		this.id = cell_ids;
 		cell_ids++;
+		
+		molResponse = UNIFORM_RESPONSE;
+		numRafts = 10;
+		if (molResponse == RECEPTOR_RAFTS){
+			rafts = new CMBioObjGroup(s, "Cell " + id + " Raft");
+			//Distribute the rafts somewhat evenly around the cell
+		}
+	}
+	
+	private void addRafts(){
+		
 	}
 	
 	public void updateObject(Random r){
@@ -95,9 +111,11 @@ public class CMCell implements CMBioObj{
 		Vector3f oldVel = new Vector3f(0, 0, 0);
 		body.getLinearVelocity(oldVel);
 		body.setLinearVelocity(new Vector3f(oldVel.x + x_mag, oldVel.y + y_mag, oldVel.z + z_mag));
+		
+		
 		//System.out.println(this.id + "-Velocity Changes:" + magnitude + " Direction:" + x_mag + "," + y_mag + ", " + z_mag );
-		float acceleration = (float)(9.8) * (volume - mass)/(mass + volume);
-		body.setGravity(new Vector3f(0,acceleration,0));
+		//float acceleration = (float)(9.8) * (volume - mass)/(mass + volume);
+		//body.setGravity(new Vector3f(0,acceleration,0));
 		//System.out.print(mass + " " + acceleration + " ");
 		//Vector3f out = new Vector3f(0,0,0);
 		//out = body.getGravity(out);
@@ -109,20 +127,27 @@ public class CMCell implements CMBioObj{
 		//If the space is not big enough for the cells, it will evenly spread out the maximum
 		//number of cells
 		
-		float width = maxP.x - minP.x - (2 * radius);
-		float height = maxP.y - minP.y - (2 * radius);
-		float depth = maxP.z - minP.z - (2 * radius);
 		float interCell = (float)(radius * .01); //distance between cells is 1% of the radius
+		float width = maxP.x - minP.x - (2 * interCell); //Make sure there is space on the edges
+		float height = maxP.y - minP.y - (2 * interCell);
+		float depth = maxP.z - minP.z - (2 * interCell);
+		
 		
 		//Divide the space up into Rows, Columns and Pages
 		//RCP >= numCells and C/R approx w/h and P/R approx d/h
 		//So R^3 >= numCells * h^2 / w * d
 		int numRows = (int)(Math.ceil(Math.pow(numCell * height * height / (width * depth), 1.0/3.0)));
+		//System.out.println("Num rows: " + numRows);
 		float rowHeight = height/numRows;
+		//System.out.println("Row Height: " + rowHeight);
 		int numCols = (int)(Math.ceil(numRows * width / height));
+		//System.out.println("Num cols: " + numCols);
 		float colWidth = width/numCols;
-		int numPages = (int)(Math.ceil(numCell / (numRows * numCols)));
+		//System.out.println("colWidth: " + colWidth);
+		int numPages = (int)(Math.ceil(numCell / ((float)numRows * numCols)));
+		//System.out.println("numPages: " + numPages);
 		float pageDepth = depth/numPages;
+		//System.out.println("pageDepth: " + pageDepth);
 		
 		//TODO:  If rowHeight or colWidth or pageDepth are too small to fit the cell
 		//Adjust the number of rows or columns until
@@ -133,16 +158,14 @@ public class CMCell implements CMBioObj{
 			int row = i / numCols % numRows;
 			int page = i / numSquares;
 			
-			float x = minP.x + (col * colWidth) + (colWidth/2 + interCell);
-			float y = minP.y + (row * rowHeight) + (rowHeight/2 + interCell);
-			float z = minP.z + (page * pageDepth) + (pageDepth/2 + interCell);
+			float x = minP.x + (interCell/2) + (col * colWidth) + (colWidth/2);
+			float y = minP.y + (interCell/2) + (row * rowHeight) + (rowHeight/2);
+			float z = minP.z + (interCell/2) + (page * pageDepth) + (pageDepth/2);
+			//System.out.println("New Cell: " + x + ", " + y + ", " + z);
 			CMCell newCell = new CMCell(sim, new Vector3f(x,y,z));
 			theCells.addObject(newCell);
 		}
 		
-		//System.out.println(numRows);
-	    //System.out.println(numCols);
-		//System.out.println(numPages);
 		return theCells;
 	}
 	
@@ -169,22 +192,37 @@ public class CMCell implements CMBioObj{
 	
 	public void collided(CMBioObj c, Vector3f p){
 		if (c instanceof CMMolecule){
-			//Bias direction (not velocity!) towards molecule
-			//Find the current speed (magitude of velocity)
-			Vector3f oldVel = new Vector3f(0, 0, 0);
-			body.getLinearVelocity(oldVel);
-			float oldMagnitude = oldVel.length();
+			switch (molResponse){
+				case NO_RESPONSE:
+					break;
+				case UNIFORM_RESPONSE:
+					//Bias direction (not velocity!) towards molecule
+					//Find the current speed (magitude of velocity)
+					Vector3f oldVel = new Vector3f(0, 0, 0);
+					body.getLinearVelocity(oldVel);
+					float oldMagnitude = oldVel.length();
 			
-			//Find the normal to the collision point
-			Transform t = new Transform();
-			t = this.body.getMotionState().getWorldTransform(t);
-			origin = t.origin;
-			Vector3f newVel = p;
-			newVel.sub(origin);
+					//Find the normal to the collision point
+					Transform t = new Transform();
+					t = this.body.getMotionState().getWorldTransform(t);
+					origin = t.origin;
+					Vector3f newVel = new Vector3f();
+					newVel.set(p.x, p.y, p.z);
+					newVel.sub(origin);
+					newVel.scale(responseDeltaVel);
 			
-			//scale the normal to the current speed
-			newVel.scale(oldMagnitude/newVel.length());
-			body.setLinearVelocity(newVel);
+					//scale the normal to the current speed
+					newVel.add(oldVel);
+					newVel.scale(oldMagnitude/newVel.length());
+					body.setLinearVelocity(newVel);
+					break;
+				case OCTANT_RESPONSE:
+					break;
+				case RECEPTOR_RAFTS:
+					break;
+				default:
+					break;
+			}
 		}
 		else if (c instanceof CMWall){
 			//System.out.println("Collided with Wall");

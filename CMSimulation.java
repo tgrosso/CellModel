@@ -83,18 +83,19 @@ public class CMSimulation extends DemoApplication{
 	// maximum number of objects (test tube walls and apparatus, molecules and cells)
 	private static final int NUM_WALLS = 6;
 	private static final int NUM_MESH_BOXES = 100;
-	private static final int NUM_MOLECULES = 10;
-	private static final int NUM_CELLS = 10;
+	private static final int NUM_MOLECULES = 2000;
+	private static final int NUM_CELLS = 50;
 	private static final int MAX_PROXIES = NUM_WALLS + NUM_MESH_BOXES + NUM_MOLECULES + NUM_CELLS;
 	
 	
 	private static float wallThick = 2f;
 	private static float meshThick = 10f; //The mesh is 10 microns thick
-	private static float pore_density = 100000;
-	private static float pore_diameter = 11; //Actually 8 but need room for 10micrometer cells
-	private static float well_depth = 40;
-	private static float inset_depth = 60;
-	private static Vector3f testTubeSize = new Vector3f(80f, well_depth + inset_depth + meshThick, 80f);
+	private static float poreDensity = 100000;
+	private static float poreDiameter = 11; //Actually 8 but need room for 10micrometer cells
+	private static float wellDepth = 40;
+	private static float insetDepth = 60;
+	private static Vector3f testTubeSize = new Vector3f(80f, wellDepth + insetDepth + meshThick, 80f);
+	private Vector3f aabbMin = new Vector3f(), aabbMax = new Vector3f();
 	
 	private StringBuilder buf;
 	
@@ -106,9 +107,10 @@ public class CMSimulation extends DemoApplication{
 	private DefaultCollisionConfiguration collisionConfiguration;
 	private Random random;
 	private double summaryDelay = 500; //Minimum number of milliseconds between summary reports
-	private long startTime, currentTime, lastWriteTime;
+	private double videoDelay = 1000.0/24.0; //Minimum number of milliseconds between frame drawing
+	private long startTime, currentTime, lastWriteTime, lastImageTime;
 	private File dataDir = null;
-	private BufferedWriter initFile = null, summaryFile = null, positionFile = null;
+	private BufferedWriter summaryFile = null, positionFile = null;
 	SimpleDateFormat summaryFormat = new SimpleDateFormat("HH:mm:ss:SSS");
 	
 	public CMSimulation(IGL gl, long seed){
@@ -128,7 +130,7 @@ public class CMSimulation extends DemoApplication{
 					summaryFile.write("Time Since Sim Start\tGroup Name\tCenter of Mass\tNumber Below Mesh");
 					summaryFile.newLine();
 					positionFile = new BufferedWriter(new FileWriter("CM-" + dateString + "/positions.csv"));
-					positionFile.write("Time Since Sim Start\tType\tID\tCOM\tAABBMin\tAABBMax");
+					positionFile.write("Time Since Sim Start\tType\tID\tCOM\tLinear Velocity");
 					positionFile.newLine();
 				}
 	            
@@ -138,6 +140,7 @@ public class CMSimulation extends DemoApplication{
 		}
 		startTime = clock.getTimeMicroseconds(); //clock is inherited from DemoApplication
 		lastWriteTime = startTime;
+		lastImageTime = startTime;
 		summaryFormat.setTimeZone(TimeZone.getTimeZone("GMT")); //To get the right time formats, need Grenwhich Mean Time
 	}
 	
@@ -152,13 +155,23 @@ public class CMSimulation extends DemoApplication{
 			outputPositions();
 		}
 		
-		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		int numObjects = modelObjects.size();
 		for (int i = 0; i < numObjects; i++){
 			CMBioObj bioObj = modelObjects.getQuick(i);
 			bioObj.updateObject(random);
+			RigidBody rb = bioObj.getRigidBody();
+			aabbMin.set(0, 0, 0);
+			aabbMax.set(0, 0, 0);
+			rb.getAabb(aabbMin, aabbMax);
+			assert aabbMin.x >= -testTubeSize.x/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object to left of Test Tube";
+			assert aabbMin.y >= -testTubeSize.y/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object  below Test Tube";
+			assert aabbMin.z >= -testTubeSize.z/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object in front of Test Tube";
+			assert aabbMax.x <= testTubeSize.x/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object to right of Test Tube";
+			assert aabbMin.y <= testTubeSize.y/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object above Test Tube";
+			assert aabbMin.z <= testTubeSize.z/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object behind Test Tube";
 		}
 
+		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		// simple dynamics world doesn't handle fixed-time-stepping
 		float deltaTime = clock.getTimeMicroseconds() - currentTime;
 		currentTime = clock.getTimeMicroseconds();
@@ -236,28 +249,28 @@ public class CMSimulation extends DemoApplication{
 		//Simulation takes place in fluid.  For now, no gravity
 		dynamicsWorld.setGravity(new Vector3f(0f, 0f, 0f));
 
-		addBioObject(new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, -testTubeSize.y/2, 0f)));//bottom
-		addBioObject(new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, testTubeSize.y/2, 0f)));//top
-		addBioObject(new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f(-testTubeSize.x/2, 0f, 0f)));//left
-		addBioObject(new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f(testTubeSize.x/2, 0f, 0f)));//right
-		addBioObject(new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, testTubeSize.z/2)));//back
+		addBioObject(new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, -(testTubeSize.y+wallThick)/2, 0f)));//bottom
+		addBioObject(new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, (testTubeSize.y+wallThick)/2, 0f)));//top
+		addBioObject(new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f(-(testTubeSize.x+wallThick)/2, 0f, 0f)));//left
+		addBioObject(new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f((testTubeSize.x+wallThick)/2, 0f, 0f)));//right
+		addBioObject(new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, (testTubeSize.z + wallThick)/2)));//back
 		
-		CMWall front = new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, -testTubeSize.z/2));
+		CMWall front = new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, -(testTubeSize.z+wallThick)/2));
 		front.setVisible(false);
 		addBioObject(front);
 
-		addMesh(testTubeSize.x, testTubeSize.z, meshThick, pore_density, pore_diameter, well_depth);
-		objectGroups.add(CMCell.fillSpace(this, NUM_CELLS, new Vector3f(-testTubeSize.x/2,-testTubeSize.y/2 + well_depth + meshThick, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2,testTubeSize.y/2, testTubeSize.z/2), "RPCs"));
-		objectGroups.add(CMMolecule.fillSpace(this, NUM_MOLECULES, new Vector3f(-testTubeSize.x/2, -testTubeSize.y/2, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2, well_depth-testTubeSize.y/2, testTubeSize.z/2), "Netrin"));
-
+		addMesh(testTubeSize.x, testTubeSize.z, meshThick, poreDensity, poreDiameter, wellDepth);
+		objectGroups.add(CMCell.fillSpace(this, NUM_CELLS, new Vector3f(-testTubeSize.x/2,-testTubeSize.y/2 + wellDepth + meshThick, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2,testTubeSize.y/2, testTubeSize.z/2), "RPCs"));
+		objectGroups.add(CMMolecule.fillSpace(this, NUM_MOLECULES, new Vector3f(-testTubeSize.x/2, -testTubeSize.y/2, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2, wellDepth-testTubeSize.y/2, testTubeSize.z/2), "Netrin"));
+		
 		clientResetScene();
 	}
 	
 	@Override
 	public void myinit(){
 		super.myinit();
-		//gl.glClearColor(0f, 0f, 0f, 1f);
-		setCameraDistance(90);
+		setCameraDistance(100);
+		ele = 5f;
 		updateCamera();
 	}
 	
@@ -369,7 +382,7 @@ public class CMSimulation extends DemoApplication{
 		//p_diameter is pore diameter in micrometers
 		//although the diameter is given, for now the pores are square
 		//In addition, the number of pores will be rows * cols - even if that's a few too many
-		//The Mesh's x and z centers are the origin. The y center is height
+		//The Mesh's x and z centers are the origin. The y center is height + thickness/2
 		
 		//find number of pores 
 		double numPores = Math.ceil(p_density * width * depth * Math.pow(10, -8));
@@ -377,25 +390,25 @@ public class CMSimulation extends DemoApplication{
 		//How many rows and columns will we need? R*C>=numPores and C/R approx w/l
 		//So R^2 >= Nl/w
 		int numRows = (int)Math.ceil(Math.sqrt(numPores * depth / width));
-		int numCols = (int)Math.ceil(numPores/numRows);
+		int numCols = (int)Math.ceil((float)numPores/numRows);
 		float colWidth = width/numCols;
 		float rowHeight = depth/numRows;
 		float z_space = (rowHeight - p_diameter)/2;
 		float x_space = (colWidth - p_diameter)/2;
 		//Add row spacers:
 		for (int i = 0; i < numRows; i++){
-			Vector3f wall_origin = new Vector3f(0f, (height - testTubeSize.y/2 - thickness/2), (depth / 2 - i * (z_space*2+p_diameter) - z_space/2));
+			Vector3f wall_origin = new Vector3f(0f, (-testTubeSize.y/2 + height + thickness/2), (depth / 2 - i * (z_space*2+p_diameter) - z_space/2));
 			CMWall wall = new CMWall(width, thickness, z_space, wall_origin);
 			wall.setColor(.7f, .7f, .9f);
 			addBioObject(wall);
-			wall_origin = new Vector3f(0f, (height - testTubeSize.y/2 - thickness/2), (depth / 2 - i * (z_space*2+p_diameter) -(z_space+p_diameter)- z_space/2 ));
+			wall_origin = new Vector3f(0f, (-testTubeSize.y/2 + height + thickness/2), (depth / 2 - i * (z_space*2+p_diameter) -(z_space+p_diameter)- z_space/2 ));
 			wall = new CMWall(width, thickness, z_space, wall_origin);
 			wall.setColor(.7f, .7f, .9f);
 			addBioObject(wall);
 		}
 		
 		for (int i = 0; i < numRows; i++){
-			float y_value = height - testTubeSize.y/2 - thickness/2;
+			float y_value = -testTubeSize.y/2 + height + thickness/2;
 			float z_value = depth/2 - z_space - p_diameter/2 - i * (2 * z_space + p_diameter);
 			for (int j = 0; j < numCols; j++){
 				float x_value = width/2 - (j * (2 * x_space + p_diameter)) - x_space/2;
@@ -431,7 +444,7 @@ public class CMSimulation extends DemoApplication{
 			CMBioObjGroup group = (CMBioObjGroup)objectGroups.getQuick(i);
 			String groupName = group.getName();
 			Vector3f groupCOM = group.getCenterOfMass();
-			int numBelowMesh = group.getNumObjectsBelow(-testTubeSize.y/2 + well_depth);
+			int numBelowMesh = group.getNumObjectsBelow(-testTubeSize.y/2 + wellDepth);
 			try{
 				summaryFile.write(nowString + "\t" + groupName + "\t" + groupCOM.toString() + "\t" + numBelowMesh);
 				summaryFile.newLine();
@@ -447,8 +460,7 @@ public class CMSimulation extends DemoApplication{
 		long nowTimeMS = clock.getTimeMilliseconds()- (startTime/1000);
 		Date nowTime = new Date(nowTimeMS);
 		String nowString = summaryFormat.format(nowTime);
-		Vector3f min = new Vector3f();
-		Vector3f max = new Vector3f();
+		Vector3f vel = new Vector3f();
 		Vector3f com = new Vector3f();
 		
 		int numObjects = modelObjects.size();
@@ -458,13 +470,12 @@ public class CMSimulation extends DemoApplication{
 				continue;
 			}
 			RigidBody rb = bioObj.getRigidBody();
-			min.set(0,0,0);
-			max.set(0,0,0);
+			vel.set(0,0,0);
 			com.set(0,0,0);
-			rb.getAabb(min, max);
+			rb.getLinearVelocity(vel);
 			rb.getCenterOfMassPosition(com);
 			try{
-				positionFile.write(nowString + "\t" + bioObj.getType() + "\t" + bioObj.getID() + "\t" + com + "\t" + min + "\t" + max);
+				positionFile.write(nowString + "\t" + bioObj.getType() + "\t" + bioObj.getID() + "\t" + com + "\t" + vel);
 				positionFile.newLine();
 			}
 			catch(IOException e){
