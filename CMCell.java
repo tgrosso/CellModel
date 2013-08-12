@@ -15,6 +15,7 @@
 package cellModel;
 
 import java.util.Random;
+import java.util.Arrays;
 
 import javax.vecmath.Vector3f;
 
@@ -22,6 +23,7 @@ import org.lwjgl.util.glu.Sphere;
 
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.collision.shapes.SphereShape;
+import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
 import com.bulletphysics.linearmath.DefaultMotionState;
@@ -30,12 +32,12 @@ import com.bulletphysics.util.ObjectArrayList;
 
 
 public class CMCell implements CMBioObj{
-	final private static int NO_RESPONSE = 1, UNIFORM_RESPONSE = 2, OCTANT_RESPONSE = 3, RECEPTOR_RAFTS = 4;
+	final private static int NO_RESPONSE = 1, UNIFORM_RESPONSE = 2, DIFFERENTIAL_RESPONSE = 3;
 	private static float radius = 5.0f;
 	private static float density = 1.2f;
 	private static float volume = (float)(4.0/3.0 * Math.PI * radius * radius * radius);
 	private static float mass = density * volume;
-	private static float maxVelChange = 0.5f;
+	private static float maxVelChange = 0.3f;
 	private static int cell_ids = 0;
 	private int molResponse = NO_RESPONSE;
 	private int id;
@@ -43,18 +45,28 @@ public class CMCell implements CMBioObj{
 	private static SphereShape cellShape = new SphereShape(radius);
 	private CMRigidBody body;
 	private Transform trans;
-	private float cellFriction = .2f;
-	private static float[] cellColor = {1.0f, 0.5f, 0.5f, 1.0f};
+	private float cellFriction = .3f;
+	private static float[] baseCellColor = {1.0f, 0.7f, 0.7f};
+	private float[] cellColor;
 	protected float cameraDistance = 20f;
 	private boolean visible = true;
+	private boolean toRemove = false;
 	private CMSimulation sim;
-	private static float responseDeltaVel = 0.1f;
-	private CMBioObjGroup rafts;
-	private int numRafts = 0;
+	private static float responseDeltaVel = 0.2f;
 	private String objectType = "Cell";
 	
+	private int verSegments = 3; //Number of vertical segments the sphere will be divided into for response to molecules
+	private int horSegments = verSegments * 2;
+	private int numSegments = horSegments * verSegments;
+	private int[] diffProbs;
+	private int baseProb = 25; //% probability that molecule will bind
+	private int currentProb = baseProb; //For Uniform response, the probability that molecule will bind to the whole cell
+	private int deltaProb = 10;
+	private float[] cumProbs; //Will hold cumulative probabilities for direction of motion
+	private float verDegPerSeg = (float)(180.0/verSegments), horDegPerSeg=(float)(360.0/horSegments);
+	
 	public CMCell(CMSimulation s, Vector3f o){
-		this.origin = o;
+		this.origin = new Vector3f(o);
 		this.sim = s;
 		
 		trans = new Transform();
@@ -63,63 +75,174 @@ public class CMCell implements CMBioObj{
 		
 		Vector3f localInertia = new Vector3f(0, 0, 0);
 		cellShape.calculateLocalInertia(mass, localInertia);
+		//System.out.println(localInertia);
 
 		DefaultMotionState motionState = new DefaultMotionState(trans);
 		RigidBodyConstructionInfo rbInfo = new RigidBodyConstructionInfo(mass, motionState, cellShape, localInertia);
 		rbInfo.friction = cellFriction;
 		body = new CMRigidBody(rbInfo, this);
-		float magnitude = sim.nextRandomF() * maxVelChange;
-		float hor_angle = sim.nextRandomF() * 360;
-		float ver_angle = sim.nextRandomF() * 360;
-		float y_mag = (float)(magnitude * Math.sin(ver_angle));
-		double h = magnitude * Math.cos(ver_angle);
-		float x_mag = (float)(Math.cos(hor_angle)* h);
-		float z_mag = (float)(Math.sin(hor_angle) * h);
-		body.setLinearVelocity(new Vector3f(x_mag, y_mag, z_mag));
-		//body.setLinearVelocity(new Vector3f(3, 3, 3));
-		
-		//set the gravity for the cell - it is modified by boyancy
-		//a = g(rho_water * volume - mass)/mass + rho_water * Volume
-		//This assumes rho_water = 1
-		float acceleration = (float)(9.8) * (volume - mass)/(mass + volume);
-		body.setGravity(new Vector3f(0,acceleration,0));
 		
 		this.id = cell_ids;
 		cell_ids++;
 		
-		molResponse = UNIFORM_RESPONSE;
-		numRafts = 10;
-		if (molResponse == RECEPTOR_RAFTS){
-			rafts = new CMBioObjGroup(s, "Cell " + id + " Raft");
-			//Distribute the rafts somewhat evenly around the cell
+		cellColor = new float[3];
+		for (int i = 0; i < 3; i++){
+			cellColor[i] = (float)(baseProb/100.0) * baseCellColor[i];
 		}
-	}
-	
-	private void addRafts(){
 		
+		diffProbs = new int[numSegments];
+		cumProbs = new float[numSegments];
+		for (int i = 0; i < numSegments; i++){
+			diffProbs[i] = baseProb;
+		}
+		
+		molResponse = UNIFORM_RESPONSE;
 	}
 	
 	public void updateObject(Random r){
+		//probability of binding moves towards the baseline
+		if (!body.isActive()){
+			//System.out.println("Cell " + this.id + " has been deactivated.");
+			body.activate();
+		}
+		if (molResponse == DIFFERENTIAL_RESPONSE){
+			//Move probabilities towards baseline
+			for (int i = 0; i < numSegments; i++){
+				if (diffProbs[i] > baseProb){
+					diffProbs[i]--;
+				}
+				else if(diffProbs[i] < baseProb){
+					diffProbs[i]++;
+				}
+			}
+		}
+		else if (molResponse == UNIFORM_RESPONSE){
+			if (currentProb < baseProb){
+				currentProb++;
+			}
+			else if (currentProb > baseProb){
+				currentProb--;
+			}
+			for (int i = 0; i < 3; i++){
+				cellColor[i] = (float)(currentProb/100.0) * baseCellColor[i];
+			}
+		}
 		//randomly change the velocity of the cell
-		float magnitude = r.nextFloat() * maxVelChange;
-		float hor_angle = r.nextFloat() * 360;
-		float ver_angle = r.nextFloat() * 360;
-		float y_mag = (float)(magnitude * Math.sin(ver_angle));
-		double h = magnitude * Math.cos(ver_angle);
-		float x_mag = (float)(Math.cos(hor_angle)* h);
-		float z_mag = (float)(Math.sin(hor_angle) * h);
-		Vector3f oldVel = new Vector3f(0, 0, 0);
+		Vector3f oldVel = new Vector3f(0f, 0f, 0f);
 		body.getLinearVelocity(oldVel);
-		body.setLinearVelocity(new Vector3f(oldVel.x + x_mag, oldVel.y + y_mag, oldVel.z + z_mag));
+		Vector3f deltaVel = getRandomDeltaVel();
+		//System.out.print("Cell " + this.id + ": Old Vel" + oldVel + " DeltaVel " + deltaVel);
+		//System.out.print(" is Active? " + body.isActive());
+		deltaVel.add(oldVel);
+		//System.out.println(deltaVel);
+		body.setLinearVelocity(deltaVel);
+		//System.out.println(" newVel: " + deltaVel + " gravity: " + body.getGravity(grav));
 		
-		
-		//System.out.println(this.id + "-Velocity Changes:" + magnitude + " Direction:" + x_mag + "," + y_mag + ", " + z_mag );
-		//float acceleration = (float)(9.8) * (volume - mass)/(mass + volume);
-		//body.setGravity(new Vector3f(0,acceleration,0));
-		//System.out.print(mass + " " + acceleration + " ");
-		//Vector3f out = new Vector3f(0,0,0);
-		//out = body.getGravity(out);
-		//System.out.println("gravity: " + out);
+		//set the current origin
+		body.getMotionState().getWorldTransform(trans);
+		this.origin.set(trans.origin);
+	}
+	
+	public Vector3f getOrigin(){
+		return this.origin;
+	}
+	
+	public float getRadius(){
+		return radius;
+	}
+	
+	private Vector3f getRandomDeltaVel(){
+		//System.out.println("Getting Random Delta Velocity");
+		Vector3f deltaVel = new Vector3f(0f, 0f, 0f);
+		float magnitude = (sim.nextRandomF() * maxVelChange);
+		float horAngle, verAngle, yMag, xMag, zMag;
+		double h;
+		switch(molResponse){
+			case UNIFORM_RESPONSE:
+			case NO_RESPONSE:
+				//For these responses, simply get a random velocity vector
+				//Get random horizontal angle between 0 and 2 * PI
+				horAngle = (float)(sim.nextRandomF() * 2 * Math.PI);
+				//Get random vertical angle between -PI/2 to +PI/2
+				verAngle = (float)(sim.nextRandomF() * Math.PI - (Math.PI/2));
+				
+				yMag = (float)(magnitude * Math.sin(verAngle));
+				h = magnitude * Math.cos(verAngle);
+				xMag = (float)(Math.cos(horAngle)* h);
+				zMag = (float)(Math.sin(horAngle) * h);
+				
+				deltaVel.set(xMag, yMag, zMag);
+				
+				/*
+				System.out.println("  Straight random velocity");
+				System.out.print("  horAngle: " + horAngle + "(" + Math.toDegrees(horAngle) + "), ");
+				System.out.println("  verAngle: " + verAngle + "(" + Math.toDegrees(verAngle) + ")");
+				System.out.print("  Magnitude: " + magnitude + " Delta V: " + xMag + ", " + yMag + ", " + zMag);
+				System.out.println(" deltaVel " + deltaVel);*/
+				break;
+			case DIFFERENTIAL_RESPONSE:
+				//Use the probabilities of the horizontal and vertical segments to choose a direction
+				//1. Get the cumulative distributions of the horizontal and vertical probabilities
+				int totalProbs = 0;
+				
+				for (int i = 0; i < numSegments; i++){
+					totalProbs += diffProbs[i];
+				}
+				
+				cumProbs[0] = diffProbs[0]/(float)totalProbs;
+				
+				for (int i = 1; i < numSegments; i++){
+					cumProbs[i] = (float)(cumProbs[i-1] + diffProbs[i]/(float)totalProbs);
+				}
+				
+				//Now get a random value for direction
+				float randomProb = sim.nextRandomF();
+
+				//Find the actual angles
+				int randSegment = -1;
+				for (int i = 0; i < numSegments; i++){
+					if (cumProbs[i] >= randomProb){
+						randSegment = i;
+						break;
+					}
+				}
+				if (randSegment < 0){
+					randSegment = 0;
+				}
+				
+				//Now determine the vertical segment and the horizontal segment
+				int verSegment = randSegment / horSegments;
+				int horSegment = randSegment % horSegments;
+				
+				//We have probabilistically chosen a random horizontal and vertical segment to bias the cell's motion toward
+				//Now we find the actual angle at the center of that segment
+				verAngle = (float)(verDegPerSeg * verSegment - 90 + (verDegPerSeg/2.0));
+				horAngle = (float)(horDegPerSeg * horSegment + (horDegPerSeg/2.0));
+				
+				double verAngleRads = Math.toRadians(verAngle);
+				double horAngleRads = Math.toRadians(horAngle);
+				yMag = (float)(magnitude * Math.sin(verAngleRads));
+				h = magnitude * Math.cos(verAngleRads);
+				xMag = (float)(Math.cos(horAngleRads)* h);
+				zMag = (float)(Math.sin(horAngleRads) * h);
+				deltaVel.set(xMag, yMag, zMag);
+				
+				/*
+				System.out.println("  Differential Response");
+				System.out.println("  diffProbs:" + Arrays.toString(diffProbs));
+				System.out.println("  Total Probs: " + totalProbs);
+				System.out.println("  cumProbs:" + Arrays.toString(cumProbs));
+				System.out.println("  random Prob: " + randomProb + "  random Segment: " + randSegment);
+				System.out.println("  HorSegment: " + horSegment + " VerSegment: " + verSegment);
+				System.out.print("  horAngle: " + horAngle);
+				System.out.println("  verAngle: " + verAngle);
+				*/
+				break;
+			default: break;
+				
+		}
+		//System.out.println(deltaVel);
+		return (deltaVel);
 	}
 	
 	public static CMBioObjGroup fillSpace(CMSimulation sim, int numCell, Vector3f minP, Vector3f maxP, String name){
@@ -164,9 +287,30 @@ public class CMCell implements CMBioObj{
 			//System.out.println("New Cell: " + x + ", " + y + ", " + z);
 			CMCell newCell = new CMCell(sim, new Vector3f(x,y,z));
 			theCells.addObject(newCell);
+			newCell.setCellGravity();
+			newCell.setInitialVel();
 		}
 		
 		return theCells;
+	}
+	
+	public void setCellGravity(){
+		//set the gravity for the cell - it is modified by boyancy
+		//a = g(rho_water * volume - mass)/mass + rho_water * Volume
+		//This assumes rho_water = 1
+		float acceleration = (float)(9.8) * (volume - mass)/(mass + volume);
+		body.setGravity(new Vector3f(0,acceleration,0));
+	}
+	
+	private void setInitialVel(){
+		float magnitude = sim.nextRandomF() * maxVelChange;
+		float hor_angle = (float)(sim.nextRandomF() * 2 * Math.PI);
+		float ver_angle = (float)((sim.nextRandomF() * Math.PI) - Math.PI/2.0);
+		float y_mag = (float)(magnitude * Math.sin(ver_angle));
+		double h = magnitude * Math.cos(ver_angle);
+		float x_mag = (float)(Math.cos(hor_angle)* h);
+		float z_mag = (float)(Math.sin(hor_angle) * h);
+		body.setLinearVelocity(new Vector3f(x_mag, y_mag, z_mag));
 	}
 	
 	
@@ -179,7 +323,7 @@ public class CMCell implements CMBioObj{
 	}
 	
 	public Vector3f getColor3Vector(){
-		return new Vector3f(1.0f, 1.0f, 0.0f);
+		return new Vector3f(cellColor[0], cellColor[1], cellColor[2]);
 	}
 	
 	public void setVisible(boolean v){
@@ -190,35 +334,87 @@ public class CMCell implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c, Vector3f p){
+	public void collided(CMBioObj c, Vector3f localPoint, long collId){
+		//Find the vector to the collision point
+		Vector3f newVel = new Vector3f();
+		newVel.set(localPoint);
 		if (c instanceof CMMolecule){
 			switch (molResponse){
 				case NO_RESPONSE:
 					break;
 				case UNIFORM_RESPONSE:
-					//Bias direction (not velocity!) towards molecule
+					//See if molecule binds
+					if (sim.nextRandomF() > (float)currentProb/100.0){
+						//molecule does not bind
+						return;
+					}
+					//See if molecule has already been marked for removal
+					if (c.isMarked()){
+						return;
+					}
+					//System.out.println("Molecule bound");
+					c.markForRemoval();
+					currentProb += deltaProb;
+					if (currentProb > 100){
+						//if molecule binds, the cell becomes more receptive. This value could be 
+						//different depending on the speed of response
+						currentProb = 100;
+					}
+					
+					for (int i = 0; i < 3; i++){
+						cellColor[i] = (float)(currentProb/100.0) * baseCellColor[i];
+					}
+					//Bias velocity towards molecule
 					//Find the current speed (magitude of velocity)
 					Vector3f oldVel = new Vector3f(0, 0, 0);
 					body.getLinearVelocity(oldVel);
-					float oldMagnitude = oldVel.length();
 			
-					//Find the normal to the collision point
-					Transform t = new Transform();
-					t = this.body.getMotionState().getWorldTransform(t);
-					origin = t.origin;
-					Vector3f newVel = new Vector3f();
-					newVel.set(p.x, p.y, p.z);
-					newVel.sub(origin);
+					//Scale the new velocity vctor to response length
 					newVel.scale(responseDeltaVel);
-			
-					//scale the normal to the current speed
+					//Add the response velocity to the old velocity
 					newVel.add(oldVel);
-					newVel.scale(oldMagnitude/newVel.length());
 					body.setLinearVelocity(newVel);
 					break;
-				case OCTANT_RESPONSE:
-					break;
-				case RECEPTOR_RAFTS:
+				case DIFFERENTIAL_RESPONSE:
+					//The probabilities at the horizontal and vertical angles change
+					//Find the vertical segment
+					float verAngle = (float)(Math.asin(newVel.y/newVel.length()));
+					double h = Math.cos(verAngle) * newVel.length();
+					verAngle = (float)Math.toDegrees(verAngle);
+					int verSegment = (int)((verAngle + 90) / verDegPerSeg);
+					assert verSegment < verSegments : "Vertical Segment > verSegments";
+					
+					float horAngle = (float)(Math.acos(newVel.x/h));
+					horAngle = (float)Math.toDegrees(horAngle);
+					//Adjust to an angle between 0 and 2 * PI
+					if (newVel.z < 0){
+						horAngle = 360 - horAngle;
+					}
+					int horSegment = (int)(horAngle / horDegPerSeg);
+					
+					int index = horSegments * verSegment + horSegment;
+					
+					//See if molecule binds
+					if (sim.nextRandomF() > (float)diffProbs[index]/100.0){
+						//molecule does not bind
+						return;
+					}
+					//See if molecule has already been marked for removal
+					if (c.isMarked()){
+						return;
+					}
+					//System.out.println("Molecule bound");
+					c.markForRemoval();
+					
+					diffProbs[index] += deltaProb;
+					if (diffProbs[index] > 100){
+						diffProbs[index] = 100;
+					}
+					
+					
+					//System.out.println("Vector: " + newVel + " verAngle: " + verAngle + " verSegment: " + verSegment);
+					//System.out.println("horAngle: " + horAngle + " horSegment: " + horSegment);
+					
 					break;
 				default:
 					break;
@@ -227,6 +423,10 @@ public class CMCell implements CMBioObj{
 		else if (c instanceof CMWall){
 			//System.out.println("Collided with Wall");
 		}
+	}
+	
+	public boolean specialRender(IGL gl, Transform t){
+		return false;
 	}
 	
 	public String getCsvData(){
@@ -258,11 +458,27 @@ public class CMCell implements CMBioObj{
 		return mass;
 	}
 	
+	public CMSimulation getSim(){
+		return sim;
+	}
+	
 	public void addConstraint(CMGenericConstraint c){
 		
 	}
 	
 	public void removeConstraint(CMGenericConstraint c){
 		
+	}
+	
+	public void destroy(){
+		body.destroy();
+	}
+	
+	public void markForRemoval(){
+		toRemove = true;
+	}
+	
+	public boolean isMarked(){
+		return toRemove;
 	}
 }

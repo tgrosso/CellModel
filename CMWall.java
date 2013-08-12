@@ -18,6 +18,7 @@ package cellModel;
 
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.collision.shapes.BoxShape;
+import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.linearmath.Transform;
 import com.bulletphysics.linearmath.DefaultMotionState;
@@ -41,6 +42,7 @@ public class CMWall implements CMBioObj{
 	private float width, height, depth;
 	private static FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
 	private boolean visible = true;
+	private boolean toRemove = false;
 	private int id;
 	
 	public CMWall(float w, float h, float d, Vector3f o){
@@ -107,10 +109,14 @@ public class CMWall implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c, Vector3f v){
+	public void collided(CMBioObj c, Vector3f p, long collId){
 		//Do nothing for now
 		//TODO - Implement joints with cells
 		//System.out.println("Me: " + this.toString() + " It: " + c);
+	}
+	
+	public boolean specialRender(IGL gl, Transform t){
+		return false;
 	}
 	
 	public int getID(){
@@ -132,5 +138,17 @@ public class CMWall implements CMBioObj{
 	
 	public void removeConstraint(CMGenericConstraint c){
 		
+	}
+	
+	public void destroy(){
+		body.destroy();
+	}
+	
+	public void markForRemoval(){
+		toRemove = true;
+	}
+	
+	public boolean isMarked(){
+		return toRemove;
 	}
 }

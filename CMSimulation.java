@@ -57,6 +57,8 @@ import com.bulletphysics.dynamics.DiscreteDynamicsWorld;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.dynamics.constraintsolver.ConstraintSolver;
 import com.bulletphysics.dynamics.constraintsolver.SequentialImpulseConstraintSolver;
+import com.bulletphysics.dynamics.constraintsolver.TypedConstraint;
+import com.bulletphysics.extras.gimpact.GImpactCollisionAlgorithm;
 import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.linearmath.Transform;
 import com.bulletphysics.linearmath.DebugDrawModes;
@@ -81,37 +83,34 @@ public class CMSimulation extends DemoApplication{
 
 
 	// maximum number of objects (test tube walls and apparatus, molecules and cells)
-	private static final int NUM_WALLS = 6;
-	private static final int NUM_MESH_BOXES = 100;
-	private static final int NUM_MOLECULES = 2000;
+	private static final int NUM_MOLECULES = 1500;
 	private static final int NUM_CELLS = 50;
-	private static final int MAX_PROXIES = NUM_WALLS + NUM_MESH_BOXES + NUM_MOLECULES + NUM_CELLS;
+	private final CMAssay assayType = CMAssay.TRANSWELL;
 	
-	
-	private static float wallThick = 2f;
-	private static float meshThick = 10f; //The mesh is 10 microns thick
-	private static float poreDensity = 100000;
-	private static float poreDiameter = 11; //Actually 8 but need room for 10micrometer cells
-	private static float wellDepth = 40;
-	private static float insetDepth = 60;
-	private static Vector3f testTubeSize = new Vector3f(80f, wellDepth + insetDepth + meshThick, 80f);
+	private static CMTranswellChamber chamber;
+	private static CMMicrofluidicChannel channel;
 	private Vector3f aabbMin = new Vector3f(), aabbMax = new Vector3f();
+	
+	private boolean needGImpact = false;
 	
 	private StringBuilder buf;
 	
 	private ObjectArrayList<CMBioObj> modelObjects = new ObjectArrayList<CMBioObj>();
 	private ObjectArrayList<CMBioObjGroup> objectGroups = new ObjectArrayList<CMBioObjGroup>();
+	private CMBioObjGroup channelMols;
 	private BroadphaseInterface broadphase;
 	private CollisionDispatcher dispatcher;
 	private ConstraintSolver solver;
 	private DefaultCollisionConfiguration collisionConfiguration;
 	private Random random;
-	private double summaryDelay = 500; //Minimum number of milliseconds between summary reports
-	private double videoDelay = 1000.0/24.0; //Minimum number of milliseconds between frame drawing
-	private long startTime, currentTime, lastWriteTime, lastImageTime;
+	private long collisionID = 0L;
+	private double summaryDelay = 1000; //Minimum number of milliseconds between summary reports
+	private long startTime, currentTime, lastWriteTime;
 	private File dataDir = null;
-	private BufferedWriter summaryFile = null, positionFile = null;
+	private BufferedWriter summaryFile = null, positionFile = null, concentrationFile = null;
 	SimpleDateFormat summaryFormat = new SimpleDateFormat("HH:mm:ss:SSS");
+	
+	private float baseCameraDistance = 100;
 	
 	public CMSimulation(IGL gl, long seed){
 		super(gl);
@@ -132,20 +131,92 @@ public class CMSimulation extends DemoApplication{
 					positionFile = new BufferedWriter(new FileWriter("CM-" + dateString + "/positions.csv"));
 					positionFile.write("Time Since Sim Start\tType\tID\tCOM\tLinear Velocity");
 					positionFile.newLine();
+					concentrationFile = new BufferedWriter(new FileWriter("CM-" + dateString + "/concentrations.csv"));
+					concentrationFile.write("Time Since Sim Start\t");
+					concentrationFile.newLine();
 				}
 	            
 		} catch (IOException e) {
 	        	System.out.println("Cannot generate output files!");
 	        	System.out.println("IOException: " + e.toString());
 		}
+		
 		startTime = clock.getTimeMicroseconds(); //clock is inherited from DemoApplication
 		lastWriteTime = startTime;
-		lastImageTime = startTime;
 		summaryFormat.setTimeZone(TimeZone.getTimeZone("GMT")); //To get the right time formats, need Grenwhich Mean Time
 	}
 	
 	public CMSimulation(IGL gl) {
 		this(gl, System.currentTimeMillis());
+	}
+	
+	public void initPhysics() {
+		//setCameraDistance(50f);
+
+		// collision configuration contains default setup for memory, collision setup
+		collisionConfiguration = new DefaultCollisionConfiguration();
+
+		// use the default collision dispatcher. For parallel processing you can use a diffent dispatcher (see Extras/BulletMultiThreaded)
+		dispatcher = new CollisionDispatcher(collisionConfiguration);
+
+		broadphase = new DbvtBroadphase();
+
+		// the default constraint solver. For parallel processing you can use a different solver (see Extras/BulletMultiThreaded)
+		SequentialImpulseConstraintSolver sol = new SequentialImpulseConstraintSolver();
+		solver = sol;
+		
+		dynamicsWorld = new DiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfiguration);
+
+		//Simulation takes place in fluid.  For now, no gravity
+		dynamicsWorld.setGravity(new Vector3f(0f, 0.0f, 0f));
+		
+		if (assayType == CMAssay.TRANSWELL){
+			chamber = new CMTranswellChamber();
+			chamber.makeChamber(this);
+			//objectGroups.add(CMCell.fillSpace(this, NUM_CELLS, chamber.getMinAboveMeshVector(), chamber.getMaxAboveMeshVector(), "RPCs"));
+			//objectGroups.add(CMMolecule.fillSpace(this, NUM_MOLECULES, chamber.getMinBelowMeshVector(), chamber.getMaxBelowMeshVector(), "Netrin"));
+			
+			
+			CMSegmentedCell cell1 = new CMSegmentedCell(this, 5f, new Vector3f(5f, 20f, 0f), 0); 
+			addBioObject(cell1);
+			cell1.setCellGravity();
+			
+			
+			CMSegmentedCell cell2 = new CMSegmentedCell(this, 5f, new Vector3f(6f, 31f, 0f), 1); 
+			addBioObject(cell2);
+			cell2.setCellGravity();
+			
+			CMSegmentedCell cell3 = new CMSegmentedCell(this, 5f, new Vector3f(6f, 10f, 0f), 2); 
+			addBioObject(cell3);
+			cell3.setCellGravity();
+			
+			CMSegmentedCell cell4 = new CMSegmentedCell(this, 5f, new Vector3f(15f, 10f, 0f), 3); 
+			addBioObject(cell4);
+			cell4.setCellGravity();
+			
+			CMSegmentedCell cell5 = new CMSegmentedCell(this, 5f, new Vector3f(-5f, 35f, -10f), 4); 
+			addBioObject(cell5);
+			cell5.setCellGravity();
+		}
+		
+		else if(assayType == CMAssay.MICROFULIDIC){
+			int numSourceMols = 1000;
+			int numSinkMols = 50;
+			channel = new CMMicrofluidicChannel(this, numSourceMols, numSinkMols);
+			channelMols = CMMolecule.fillSpace(this, numSourceMols, 
+				channel.getMinReservoirVector(CMMicrofluidicChannel.LEFT), 
+				channel.getMaxReservoirVector(CMMicrofluidicChannel.LEFT), "ChemoAttr");
+			CMBioObjGroup sinkMols = CMMolecule.fillSpace(this, numSinkMols, 
+					channel.getMinReservoirVector(CMMicrofluidicChannel.RIGHT), 
+					channel.getMaxReservoirVector(CMMicrofluidicChannel.RIGHT), "ChemoAttr");
+			channelMols.transferGroup(sinkMols); //sinkMols is now null
+			objectGroups.add(channelMols);
+		}
+		
+		if (needGImpact){
+			GImpactCollisionAlgorithm.registerAlgorithm(dispatcher);
+		}
+		clientResetScene();
 	}
 	
 	@Override
@@ -163,12 +234,14 @@ public class CMSimulation extends DemoApplication{
 			aabbMin.set(0, 0, 0);
 			aabbMax.set(0, 0, 0);
 			rb.getAabb(aabbMin, aabbMax);
+			/*
 			assert aabbMin.x >= -testTubeSize.x/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object to left of Test Tube";
 			assert aabbMin.y >= -testTubeSize.y/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object  below Test Tube";
 			assert aabbMin.z >= -testTubeSize.z/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object in front of Test Tube";
 			assert aabbMax.x <= testTubeSize.x/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object to right of Test Tube";
 			assert aabbMin.y <= testTubeSize.y/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object above Test Tube";
 			assert aabbMin.z <= testTubeSize.z/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object behind Test Tube";
+			*/
 		}
 
 		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -195,16 +268,38 @@ public class CMSimulation extends DemoApplication{
 				for (int j=0; j<numContacts; j++){
 					ManifoldPoint pt = contactManifold.getContactPoint(j);
 					if (pt.getDistance()<0f){
-						Vector3f ptA = new Vector3f(0f, 0f, 0f);
-						ptA = pt.getPositionWorldOnA(ptA);
-						Vector3f ptB = new Vector3f(0f, 0f, 0f);
-						ptB = pt.getPositionWorldOnB(ptB);
-						objA.getParent().collided(objB.getParent(), ptA);
-						objB.getParent().collided(objA.getParent(), ptB);
+						Vector3f localA = new Vector3f(0f, 0f, 0f);
+						localA.set(pt.localPointA);
+						//Vector3f com = new Vector3f(0f, 0f, 0f);
+						//objA.getCenterOfMassPosition(com);
+						//Vector3f worldA = new Vector3f(0f, 0f, 0f);
+						//pt.getPositionWorldOnA(worldA);
+						//if (objA.getParent().getType().equals("Cell")){
+						//	System.out.println(com + ", " + pt.localPointA + ", " + worldA);
+						//}
+						Vector3f localB = new Vector3f(0f, 0f, 0f);
+						localB.set(pt.localPointB);
+						objA.getParent().collided(objB.getParent(), localA, collisionID);
+						objB.getParent().collided(objA.getParent(), localB, collisionID);
+						collisionID++;
+						if (collisionID >= Long.MAX_VALUE){
+							collisionID = 0L;
+						}
 						
 					}
 				}
 			}
+		}
+		
+		if (assayType == CMAssay.MICROFULIDIC){
+			channel.updateChannel(this, channelMols);
+		}
+		
+		//remove objects marked for removal
+		int numGroups = objectGroups.size();
+		for (int i = 0; i < numGroups; i++){
+			CMBioObjGroup group = objectGroups.getQuick(i);
+			group.cleanGroup();
 		}
 		renderme();
 		if ((currentTime - lastWriteTime)/1000.0 > summaryDelay){
@@ -212,9 +307,6 @@ public class CMSimulation extends DemoApplication{
 			outputPositions();
 			lastWriteTime = currentTime;
 		}
-
-		//glFlush();
-		//glutSwapBuffers();
 	}
 
 	@Override
@@ -229,47 +321,20 @@ public class CMSimulation extends DemoApplication{
 		}
 	}
 
-	public void initPhysics() {
-		//setCameraDistance(50f);
-
-		// collision configuration contains default setup for memory, collision setup
-		collisionConfiguration = new DefaultCollisionConfiguration();
-
-		// use the default collision dispatcher. For parallel processing you can use a diffent dispatcher (see Extras/BulletMultiThreaded)
-		dispatcher = new CollisionDispatcher(collisionConfiguration);
-
-		broadphase = new DbvtBroadphase();
-
-		// the default constraint solver. For parallel processing you can use a different solver (see Extras/BulletMultiThreaded)
-		SequentialImpulseConstraintSolver sol = new SequentialImpulseConstraintSolver();
-		solver = sol;
-		
-		dynamicsWorld = new DiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfiguration);
-
-		//Simulation takes place in fluid.  For now, no gravity
-		dynamicsWorld.setGravity(new Vector3f(0f, 0f, 0f));
-
-		addBioObject(new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, -(testTubeSize.y+wallThick)/2, 0f)));//bottom
-		addBioObject(new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, (testTubeSize.y+wallThick)/2, 0f)));//top
-		addBioObject(new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f(-(testTubeSize.x+wallThick)/2, 0f, 0f)));//left
-		addBioObject(new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f((testTubeSize.x+wallThick)/2, 0f, 0f)));//right
-		addBioObject(new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, (testTubeSize.z + wallThick)/2)));//back
-		
-		CMWall front = new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, -(testTubeSize.z+wallThick)/2));
-		front.setVisible(false);
-		addBioObject(front);
-
-		addMesh(testTubeSize.x, testTubeSize.z, meshThick, poreDensity, poreDiameter, wellDepth);
-		objectGroups.add(CMCell.fillSpace(this, NUM_CELLS, new Vector3f(-testTubeSize.x/2,-testTubeSize.y/2 + wellDepth + meshThick, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2,testTubeSize.y/2, testTubeSize.z/2), "RPCs"));
-		objectGroups.add(CMMolecule.fillSpace(this, NUM_MOLECULES, new Vector3f(-testTubeSize.x/2, -testTubeSize.y/2, -testTubeSize.z/2), new Vector3f(testTubeSize.x/2, wellDepth-testTubeSize.y/2, testTubeSize.z/2), "Netrin"));
-		
-		clientResetScene();
+	
+	
+	public void addConstraint(TypedConstraint c){
+		dynamicsWorld.addConstraint(c);
+	}
+	
+	public void removeConstraint(TypedConstraint c){
+		dynamicsWorld.removeConstraint(c);
 	}
 	
 	@Override
 	public void myinit(){
 		super.myinit();
-		setCameraDistance(100);
+		setCameraDistance(baseCameraDistance);
 		ele = 5f;
 		updateCamera();
 	}
@@ -287,7 +352,9 @@ public class CMSimulation extends DemoApplication{
 					RigidBody rb = bioObj.getRigidBody();
 					DefaultMotionState motionState = (DefaultMotionState)rb.getMotionState();
 					m.set(motionState.graphicsWorldTrans);
-					GLShapeDrawer.drawOpenGL(gl, m, bioObj.getCollisionShape(), bioObj.getColor3Vector(), getDebugMode());
+					if (!bioObj.specialRender(gl, m)){
+						GLShapeDrawer.drawOpenGL(gl, m, bioObj.getCollisionShape(), bioObj.getColor3Vector(), getDebugMode());
+					}
 				}
 			}
 				
@@ -377,51 +444,7 @@ public class CMSimulation extends DemoApplication{
 		//updateCamera();
 	}
 	
-	public void addMesh(float width, float depth, float thickness, float p_density, float p_diameter, float height){
-		//p_density is pore density - pores/cm^2
-		//p_diameter is pore diameter in micrometers
-		//although the diameter is given, for now the pores are square
-		//In addition, the number of pores will be rows * cols - even if that's a few too many
-		//The Mesh's x and z centers are the origin. The y center is height + thickness/2
-		
-		//find number of pores 
-		double numPores = Math.ceil(p_density * width * depth * Math.pow(10, -8));
-		
-		//How many rows and columns will we need? R*C>=numPores and C/R approx w/l
-		//So R^2 >= Nl/w
-		int numRows = (int)Math.ceil(Math.sqrt(numPores * depth / width));
-		int numCols = (int)Math.ceil((float)numPores/numRows);
-		float colWidth = width/numCols;
-		float rowHeight = depth/numRows;
-		float z_space = (rowHeight - p_diameter)/2;
-		float x_space = (colWidth - p_diameter)/2;
-		//Add row spacers:
-		for (int i = 0; i < numRows; i++){
-			Vector3f wall_origin = new Vector3f(0f, (-testTubeSize.y/2 + height + thickness/2), (depth / 2 - i * (z_space*2+p_diameter) - z_space/2));
-			CMWall wall = new CMWall(width, thickness, z_space, wall_origin);
-			wall.setColor(.7f, .7f, .9f);
-			addBioObject(wall);
-			wall_origin = new Vector3f(0f, (-testTubeSize.y/2 + height + thickness/2), (depth / 2 - i * (z_space*2+p_diameter) -(z_space+p_diameter)- z_space/2 ));
-			wall = new CMWall(width, thickness, z_space, wall_origin);
-			wall.setColor(.7f, .7f, .9f);
-			addBioObject(wall);
-		}
-		
-		for (int i = 0; i < numRows; i++){
-			float y_value = -testTubeSize.y/2 + height + thickness/2;
-			float z_value = depth/2 - z_space - p_diameter/2 - i * (2 * z_space + p_diameter);
-			for (int j = 0; j < numCols; j++){
-				float x_value = width/2 - (j * (2 * x_space + p_diameter)) - x_space/2;
-				CMWall wall = new CMWall(x_space, thickness, p_diameter, new Vector3f(x_value, y_value, z_value));
-				wall.setColor(.7f, .7f, .9f);
-				addBioObject(wall);
-				x_value = width/2 - (j * (2 * x_space + p_diameter)) - x_space/2-p_diameter-x_space;
-				wall = new CMWall(x_space, thickness, p_diameter, new Vector3f(x_value, y_value, z_value));
-				wall.setColor(.7f, .7f, .9f);
-				addBioObject(wall);
-			}
-		}
-	}
+	
 	
 	public void addBioObject(CMBioObj obj){
 		//This method adds a wall to the container
@@ -429,8 +452,25 @@ public class CMSimulation extends DemoApplication{
 		dynamicsWorld.addRigidBody(obj.getRigidBody());
 	}
 	
+	public void removeBioObject(CMBioObj obj){
+		//Ugh!  How do I do this?
+		dynamicsWorld.removeRigidBody(obj.getRigidBody());
+		modelObjects.remove(obj);
+	}
+	
 	public float nextRandomF(){
-		return random.nextFloat();
+		float x = random.nextFloat();
+		//System.out.println(x);
+		return x;
+	}
+	
+	public float nextGaussianF(){
+		float x = (float)random.nextGaussian();
+		return x;
+	}
+	
+	public void setNeedsGImpact(boolean b){
+		needGImpact = b;
 	}
 	
 	public void outputSummary(){
@@ -440,17 +480,33 @@ public class CMSimulation extends DemoApplication{
 		
 		int numGroups = objectGroups.size();
 		
-		for (int i = 0; i < numGroups; i++){
-			CMBioObjGroup group = (CMBioObjGroup)objectGroups.getQuick(i);
-			String groupName = group.getName();
-			Vector3f groupCOM = group.getCenterOfMass();
-			int numBelowMesh = group.getNumObjectsBelow(-testTubeSize.y/2 + wellDepth);
+		if (assayType == CMAssay.TRANSWELL){
+			for (int i = 0; i < numGroups; i++){
+				CMBioObjGroup group = (CMBioObjGroup)objectGroups.getQuick(i);
+				String groupName = group.getName();
+				Vector3f groupCOM = group.getCenterOfMass();
+		
+				int numBelowMesh = group.getNumObjectsInside("RPCs", chamber.getMinBelowMeshVector(), chamber.getMaxBelowMeshVector());
+				try{
+					summaryFile.write(nowString + "\t" + groupName + "\t" + groupCOM.toString() + "\t" + numBelowMesh);
+					summaryFile.newLine();
+				}
+				catch(IOException e){
+					System.out.println("Error writing data to summary file.");
+					System.out.println(e.toString());
+				}
+			}
+		}
+		
+		if (assayType == CMAssay.MICROFULIDIC){
 			try{
-				summaryFile.write(nowString + "\t" + groupName + "\t" + groupCOM.toString() + "\t" + numBelowMesh);
-				summaryFile.newLine();
+				concentrationFile.write(nowString + "\t");
+				channel.writeConcentrationData(concentrationFile, channelMols);
+				concentrationFile.newLine();
+				concentrationFile.flush();
 			}
 			catch(IOException e){
-				System.out.println("Error writing data to summary file.");
+				System.out.println("Error writing data to concentration file.");
 				System.out.println(e.toString());
 			}
 		}
@@ -485,15 +541,25 @@ public class CMSimulation extends DemoApplication{
 		}
 	}
 	
+	public long getCurrentTimeMilliseconds(){
+		return clock.getTimeMilliseconds();
+	}
+	
+	public void setBaseCameraDistance(float d){
+		baseCameraDistance = d;
+	}
+	
 	public void wrapUp(){
 		try{
 			summaryFile.flush();
 			summaryFile.close();
 			positionFile.flush();
 			positionFile.close();
+			concentrationFile.flush();
+			concentrationFile.close();
 		}
 		catch(IOException e){
-			System.out.println("Unable to close summary file");
+			System.out.println("Unable to close output files");
 			System.out.println(e.toString());
 		}
 	}

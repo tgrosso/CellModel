@@ -45,7 +45,22 @@ public class CMBioObjGroup {
 			return false;
 		}
 		objList.remove(index);
+		sim.removeBioObject(c);
+		c.destroy();
 		return true;
+	}
+	
+	public void cleanGroup(){
+		int index = 0;
+		while (index < objList.size()){
+			CMBioObj obj = objList.getQuick(index);
+			if (obj.isMarked()){
+				if (removeObject(obj)){
+					continue; //Don't change index if object is removed
+				}
+			}
+			index++;
+		}
 	}
 	
 	public String getName(){
@@ -69,8 +84,8 @@ public class CMBioObjGroup {
 		return center;
 	}
 	
-	public int getNumObjectsBelow(float y_value){
-		int numBelow = 0;
+	public int getNumObjectsInside(String whichGroup, Vector3f minVec, Vector3f maxVec){
+		int numInside = 0;
 		int num = objList.size();
 		Vector3f min = new Vector3f();
 		Vector3f max = new Vector3f();
@@ -79,16 +94,23 @@ public class CMBioObjGroup {
 			min.set(0,0,0);
 			max.set(0,0,0);
 			rb.getAabb(min, max);
-			if (max.y < y_value && min.y < y_value && groupName == "RPCs"){
+			if (min.x >= minVec.x && max.x <= maxVec.x
+					&& min.y >= minVec.y && max.y <= maxVec.y
+					&& min.z >= minVec.z && max.z <= maxVec.z
+					&& groupName.equals(whichGroup)){
 				//System.out.println(max.toString());
-				numBelow++;
+				numInside++;
 			}
 		}
-		return numBelow;
+		return numInside;
 	}
 	
 	public int getNumMembers(){
 		return objList.size();
 	}
 	
+	public void transferGroup(CMBioObjGroup newGroup){
+		objList.addAll(newGroup.objList);
+		newGroup = null;
+	}
 }

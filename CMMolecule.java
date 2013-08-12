@@ -22,6 +22,7 @@ import javax.vecmath.Vector3f;
 import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.linearmath.Transform;
 import com.bulletphysics.util.ObjectArrayList;
+import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
 import org.lwjgl.BufferUtils;
@@ -36,7 +37,7 @@ import org.lwjgl.util.glu.Sphere;
 public class CMMolecule implements CMBioObj{
 	private static float radius = .1f;
 	private static float mass = (float)(4.0/3.0 * Math.PI * radius * radius * radius); //assume density of 1 g/cm3
-	private static float maxVelChange = .2f;
+	private static float maxVelChange = 1.0f;
 	private static int mol_ids = 0;
 	private int id;
 	private Vector3f origin;
@@ -47,6 +48,7 @@ public class CMMolecule implements CMBioObj{
 	private static float[] molColor = {1.0f, 1.0f, 0.0f, 1.0f};
 	protected float cameraDistance = 20f;
 	private boolean visible = true;
+	private boolean toRemove = false;
 	
 	public CMMolecule(CMSimulation sim, Vector3f o){
 		this.origin = o;
@@ -131,10 +133,14 @@ public class CMMolecule implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c, Vector3f v){
+	public void collided(CMBioObj c, Vector3f v, long collId){
 		//Do nothing for now.  Molecules don't do anything when they collide
 		//TODO - Should molecules be removed from the simulation when they collide with cells?
 		//System.out.println("Me: " + this.toString() + " It: " + c);
+	}
+	
+	public boolean specialRender(IGL gl, Transform t){
+		return false;
 	}
 	
 	/*public String getCsvData(){
@@ -170,5 +176,17 @@ public class CMMolecule implements CMBioObj{
 	
 	public void removeConstraint(CMGenericConstraint c){
 		
+	}
+	
+	public void destroy(){
+		body.destroy();
+	}
+	
+	public void markForRemoval(){
+		toRemove = true;
+	}
+	
+	public boolean isMarked(){
+		return toRemove;
 	}
 }

@@ -9,7 +9,7 @@
  * 
  * 
  * Package: cellModel
- * File: CMCell.java
+ * File: CMRigidBody.java
  * 
  */
 package cellModel;
