@@ -20,26 +20,35 @@ package cellModel;
 import java.util.Date;
 import java.util.Random;
 import javax.vecmath.Vector3f;
-import java.util.Random;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.dynamics.constraintsolver.Generic6DofConstraint;
+import com.bulletphysics.dynamics.constraintsolver.Point2PointConstraint;
+import com.bulletphysics.linearmath.Transform;
 
 
-public class CMGenericConstraint extends Generic6DofConstraint{ // implements CMBioObj {
+public class CMGenericConstraint extends Point2PointConstraint{ // implements CMBioObj {
+//public class CMGenericConstraint extends Generic6DofConstraint{ // implements CMBioObj {
 	private boolean isActive; //the constraint is active.. either a current constraint or a constraint that needs to be added to the world
 	private int checked; //checks in number of constraints (can keep track of number for destroy method)
 	private Date initialTime; //need to find a way to subtract Date values
 	private long life; // amount of time the constraint will last
+	private long collisionID;
+	CMSimulation sim;
 	
 	
-	
-	public CMGenericConstraint(long mu, long sd){
+	public CMGenericConstraint(CMSimulation s, CMRigidBody rbA, CMRigidBody rbB, Vector3f localA, Vector3f localB, long mu, long sd, long ID){
+	//public CMGenericConstraint(CMSimulation s, CMRigidBody rbA, CMRigidBody rbB, Transform localA, Transform localB, boolean useLinearReferenceFrameA, long mu, long sd, long ID){
+		super(rbA, rbB, localA, localB);
+		sim = s;
 		isActive = false;
 		checked = 0;
+		collisionID = ID;
 		//using Gaussian (normal) distribution
-		Random lifeGenerator = new Random();
-		life = (long) ((mu) + (lifeGenerator.nextDouble()) * sd);
+		//Random lifeGenerator = new Random();
+		//life = (long) ((mu) + (lifeGenerator.nextDouble()) * sd);
+		sim.addConstraint(this);
+
 		}
 	
 	
@@ -52,7 +61,6 @@ public class CMGenericConstraint extends Generic6DofConstraint{ // implements CM
 		
 		if (checked >= 2){
 			isActive = true;// if is active is = true, do we want the cells to stick to more than one other cell?
-			//if is active = true, will generate a constraint
 		}
 		
 		
@@ -68,28 +76,22 @@ public class CMGenericConstraint extends Generic6DofConstraint{ // implements CM
 	}
 	
 	//need better way to clean this up
-	public boolean isAlive;
-	
-	public void isCAlive(){
-		if (isActive = true){
-			isAlive = true;
-		}
-		else {
-			isAlive =false;
-		}
+	public boolean isActive(){
+		return isActive;
 	}
 	
 	
 	public void destroy(){
-		if (isAlive != true){
+		if (isActive != true){
 			//objects informed that the constraint is removed... this might have been informed in isCAlive
 			//remove checks
 			
 			//constraint removed in CMSimulation by removeConstraint method in DynamicsWorld
 		}
-		
+	}
 	
-		
+	public long getID(){
+		return (collisionID);
 	}
 
 	

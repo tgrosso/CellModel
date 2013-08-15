@@ -28,12 +28,12 @@ import javax.vecmath.Vector3f;
 
 public interface CMBioObj {
 	
-	public void collided(CMBioObj c, Vector3f point, long collID);
+	public void collided(CMBioObj c, Vector3f point, Vector3f point2, long collID);
 	public void addConstraint(CMGenericConstraint c);
 	public void removeConstraint(CMGenericConstraint c);
 	public CollisionShape getCollisionShape();
-	public RigidBody getRigidBody();
-	public void updateObject(Random r);
+	public CMRigidBody getRigidBody();
+	public void updateObject();
 	public Vector3f getColor3Vector();
 	public void setVisible(boolean v);
 	public boolean isVisible();

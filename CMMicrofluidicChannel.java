@@ -131,7 +131,7 @@ public class CMMicrofluidicChannel {
 	public void updateChannel(CMSimulation sim, CMBioObjGroup group){
 		updateReservoir(sim, LEFT, group);
 		updateReservoir(sim, RIGHT, group);
-		System.out.println("Number of Molecules: " + group.getNumMembers());
+		//System.out.println("Number of Molecules: " + group.getNumMembers());
 	}
 	
 	public void updateReservoir(CMSimulation sim, int direction, CMBioObjGroup group){
@@ -158,15 +158,15 @@ public class CMMicrofluidicChannel {
 	}
 	
 	public void writeConcentrationData(BufferedWriter output, CMBioObjGroup group){
-		System.out.println("Writing Concentration Data");
-		System.out.println(numSegments);
+		//System.out.println("Writing Concentration Data");
+		//System.out.println(numSegments);
 		String out = group.getNumMembers() + "\t";
 		for (int i = 0; i < numSegments; i++){
 			int numObj = group.getNumObjectsInside(group.getName(), getMinSegmentVector(i), 
 					getMaxSegmentVector(i));
 			out += numObj + "\t";
 		}
-		System.out.println(out);
+		//System.out.println(out);
 		try{
 			output.write(out);
 		}
@@ -214,7 +214,7 @@ public class CMMicrofluidicChannel {
 		float ypos = -(float)(channelHeight/2.0);
 		float zpos = -(float)(channelDepth/2.0);
 		Vector3f minVector = new Vector3f(xpos, ypos, zpos);
-		System.out.println("   Min Segment " + segment + ": " + minVector);
+		//System.out.println("   Min Segment " + segment + ": " + minVector);
 		return minVector;
 	}
 	
@@ -225,7 +225,7 @@ public class CMMicrofluidicChannel {
 		float ypos = (float)(channelHeight/2.0);
 		float zpos = (float)(channelDepth/2.0);
 		Vector3f maxVector = new Vector3f(xpos, ypos, zpos);
-		System.out.println("   Max Segment " + segment + ": " + maxVector);
+		//System.out.println("   Max Segment " + segment + ": " + maxVector);
 		return maxVector;
 	}
 	

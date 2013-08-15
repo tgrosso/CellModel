@@ -84,7 +84,7 @@ public class CMSimulation extends DemoApplication{
 
 	// maximum number of objects (test tube walls and apparatus, molecules and cells)
 	private static final int NUM_MOLECULES = 1500;
-	private static final int NUM_CELLS = 50;
+	private static final int NUM_CELLS = 5;
 	private final CMAssay assayType = CMAssay.TRANSWELL;
 	
 	private static CMTranswellChamber chamber;
@@ -97,6 +97,7 @@ public class CMSimulation extends DemoApplication{
 	
 	private ObjectArrayList<CMBioObj> modelObjects = new ObjectArrayList<CMBioObj>();
 	private ObjectArrayList<CMBioObjGroup> objectGroups = new ObjectArrayList<CMBioObjGroup>();
+	private ObjectArrayList<CMGenericConstraint> constraints = new ObjectArrayList<CMGenericConstraint>();
 	private CMBioObjGroup channelMols;
 	private BroadphaseInterface broadphase;
 	private CollisionDispatcher dispatcher;
@@ -173,10 +174,10 @@ public class CMSimulation extends DemoApplication{
 		if (assayType == CMAssay.TRANSWELL){
 			chamber = new CMTranswellChamber();
 			chamber.makeChamber(this);
-			//objectGroups.add(CMCell.fillSpace(this, NUM_CELLS, chamber.getMinAboveMeshVector(), chamber.getMaxAboveMeshVector(), "RPCs"));
+			objectGroups.add(CMCell.fillSpace(this, NUM_CELLS, chamber.getMinAboveMeshVector(), chamber.getMaxAboveMeshVector(), "RPCs"));
 			//objectGroups.add(CMMolecule.fillSpace(this, NUM_MOLECULES, chamber.getMinBelowMeshVector(), chamber.getMaxBelowMeshVector(), "Netrin"));
 			
-			
+			/*
 			CMSegmentedCell cell1 = new CMSegmentedCell(this, 5f, new Vector3f(5f, 20f, 0f), 0); 
 			addBioObject(cell1);
 			cell1.setCellGravity();
@@ -197,11 +198,12 @@ public class CMSimulation extends DemoApplication{
 			CMSegmentedCell cell5 = new CMSegmentedCell(this, 5f, new Vector3f(-5f, 35f, -10f), 4); 
 			addBioObject(cell5);
 			cell5.setCellGravity();
+			*/
 		}
 		
 		else if(assayType == CMAssay.MICROFULIDIC){
 			int numSourceMols = 1000;
-			int numSinkMols = 50;
+			int numSinkMols = 0;
 			channel = new CMMicrofluidicChannel(this, numSourceMols, numSinkMols);
 			channelMols = CMMolecule.fillSpace(this, numSourceMols, 
 				channel.getMinReservoirVector(CMMicrofluidicChannel.LEFT), 
@@ -229,7 +231,7 @@ public class CMSimulation extends DemoApplication{
 		int numObjects = modelObjects.size();
 		for (int i = 0; i < numObjects; i++){
 			CMBioObj bioObj = modelObjects.getQuick(i);
-			bioObj.updateObject(random);
+			bioObj.updateObject();
 			RigidBody rb = bioObj.getRigidBody();
 			aabbMin.set(0, 0, 0);
 			aabbMax.set(0, 0, 0);
@@ -279,8 +281,8 @@ public class CMSimulation extends DemoApplication{
 						//}
 						Vector3f localB = new Vector3f(0f, 0f, 0f);
 						localB.set(pt.localPointB);
-						objA.getParent().collided(objB.getParent(), localA, collisionID);
-						objB.getParent().collided(objA.getParent(), localB, collisionID);
+						objA.getParent().collided(objB.getParent(), localA, localB, collisionID);
+						objB.getParent().collided(objA.getParent(), localB, localA,  collisionID);
 						collisionID++;
 						if (collisionID >= Long.MAX_VALUE){
 							collisionID = 0L;
@@ -300,6 +302,17 @@ public class CMSimulation extends DemoApplication{
 		for (int i = 0; i < numGroups; i++){
 			CMBioObjGroup group = objectGroups.getQuick(i);
 			group.cleanGroup();
+		}
+		System.out.println("Number of constraints: " + constraints.size());
+		int index = 0;
+		while(index < constraints.size()){
+			CMGenericConstraint con = constraints.getQuick(index);
+			if (!con.isActive()){
+				constraints.remove(index);
+			}
+			else{
+				index++;
+			}
 		}
 		renderme();
 		if ((currentTime - lastWriteTime)/1000.0 > summaryDelay){
@@ -323,14 +336,37 @@ public class CMSimulation extends DemoApplication{
 
 	
 	
-	public void addConstraint(TypedConstraint c){
+	public void addConstraint(CMGenericConstraint c){
 		dynamicsWorld.addConstraint(c);
+		constraints.add(c);
 	}
 	
-	public void removeConstraint(TypedConstraint c){
+	public void removeConstraint(CMGenericConstraint c){
 		dynamicsWorld.removeConstraint(c);
+		constraints.remove(c);
 	}
 	
+	public boolean constraintExists(long id){
+		int numConstraints = constraints.size();
+		for (int i = 0; i < numConstraints; i++){
+			CMGenericConstraint constraint = constraints.getQuick(i);
+			if (constraint.getID() == id){
+				return (true);
+			}
+		}
+		return (false);
+	}
+	
+	public CMGenericConstraint getConstraint(long id){
+		int numConstraints = constraints.size();
+		for (int i = 0; i < numConstraints; i++){
+			CMGenericConstraint constraint = constraints.getQuick(i);
+			if (constraint.getID() == id){
+				return constraint;
+			}
+		}
+		return null;
+	}
 	@Override
 	public void myinit(){
 		super.myinit();
@@ -443,7 +479,6 @@ public class CMSimulation extends DemoApplication{
 		
 		//updateCamera();
 	}
-	
 	
 	
 	public void addBioObject(CMBioObj obj){

@@ -59,7 +59,7 @@ public class CMCell implements CMBioObj{
 	private int horSegments = verSegments * 2;
 	private int numSegments = horSegments * verSegments;
 	private int[] diffProbs;
-	private int baseProb = 25; //% probability that molecule will bind
+	private int baseProb = 90; //% probability that molecule will bind
 	private int currentProb = baseProb; //For Uniform response, the probability that molecule will bind to the whole cell
 	private int deltaProb = 10;
 	private float[] cumProbs; //Will hold cumulative probabilities for direction of motion
@@ -99,7 +99,7 @@ public class CMCell implements CMBioObj{
 		molResponse = UNIFORM_RESPONSE;
 	}
 	
-	public void updateObject(Random r){
+	public void updateObject(){
 		//probability of binding moves towards the baseline
 		if (!body.isActive()){
 			//System.out.println("Cell " + this.id + " has been deactivated.");
@@ -318,7 +318,7 @@ public class CMCell implements CMBioObj{
 		return cellShape;
 	}
 	
-	public RigidBody getRigidBody(){
+	public CMRigidBody getRigidBody(){
 		return body;
 	}
 	
@@ -334,7 +334,7 @@ public class CMCell implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c, Vector3f localPoint, long collId){
+	public void collided(CMBioObj c, Vector3f localPoint, Vector3f otherPoint, long collId){
 		//Find the vector to the collision point
 		Vector3f newVel = new Vector3f();
 		newVel.set(localPoint);
@@ -418,6 +418,26 @@ public class CMCell implements CMBioObj{
 					break;
 				default:
 					break;
+			}
+		}
+		else if (c instanceof CMCell){
+			if (sim.nextRandomF() > (float)currentProb/100.0){
+				//molecule does not bind
+				return;
+			}
+			System.out.println("Cell " + id + " is binding to " + c.getID());
+			if (sim.constraintExists(collId)){
+				sim.getConstraint(collId).checkIn();
+				System.out.println("Cell " + id + " is checking in.");
+			}
+			else{
+				Transform a = new Transform();
+				Transform b = new Transform();
+				body.getMotionState().getWorldTransform(a);
+				c.getRigidBody().getMotionState().getWorldTransform(b);
+				CMGenericConstraint con = new CMGenericConstraint(sim, body, c.getRigidBody(), localPoint, otherPoint, 1000, 20, collId);
+				con.checkIn();
+				System.out.println("Cell " + id + " has made a constraint.");
 			}
 		}
 		else if (c instanceof CMWall){

@@ -33,7 +33,6 @@ import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.linearmath.Transform;
 
 import cellModel.shapes.CMGImpactMeshSphere;
-import cellModel.shapes.CMBvhTriangularMeshSphere;
 
 import static com.bulletphysics.demos.opengl.IGL.*;
 
@@ -125,8 +124,56 @@ public class CMSegmentedCell implements CMBioObj{
 		body.setGravity(new Vector3f(0,acceleration,0));
 	}
 	
+	public static CMBioObjGroup fillSpace(CMSimulation sim, int numCell, float r, int dl, Vector3f minP, Vector3f maxP, String name){
+		//Will evenly spread the cells throughout the space
+		//If the space is not big enough for the cells, it will evenly spread out the maximum
+		//number of cells
+		
+		float interCell = (float)(r * .01); //distance between cells is 1% of the radius
+		float width = maxP.x - minP.x - (2 * interCell); //Make sure there is space on the edges
+		float height = maxP.y - minP.y - (2 * interCell);
+		float depth = maxP.z - minP.z - (2 * interCell);
+		
+		
+		//Divide the space up into Rows, Columns and Pages
+		//RCP >= numCells and C/R approx w/h and P/R approx d/h
+		//So R^3 >= numCells * h^2 / w * d
+		int numRows = (int)(Math.ceil(Math.pow(numCell * height * height / (width * depth), 1.0/3.0)));
+		//System.out.println("Num rows: " + numRows);
+		float rowHeight = height/numRows;
+		//System.out.println("Row Height: " + rowHeight);
+		int numCols = (int)(Math.ceil(numRows * width / height));
+		//System.out.println("Num cols: " + numCols);
+		float colWidth = width/numCols;
+		//System.out.println("colWidth: " + colWidth);
+		int numPages = (int)(Math.ceil(numCell / ((float)numRows * numCols)));
+		//System.out.println("numPages: " + numPages);
+		float pageDepth = depth/numPages;
+		//System.out.println("pageDepth: " + pageDepth);
+		
+		//TODO:  If rowHeight or colWidth or pageDepth are too small to fit the cell
+		//Adjust the number of rows or columns until
+		CMBioObjGroup theCells = new CMBioObjGroup(sim, name);
+		int numSquares = numRows * numCols;
+		for (int i = 0; i < numCell; i++){
+			int col = i % numCols;
+			int row = i / numCols % numRows;
+			int page = i / numSquares;
+			
+			float x = minP.x + (interCell/2) + (col * colWidth) + (colWidth/2);
+			float y = minP.y + (interCell/2) + (row * rowHeight) + (rowHeight/2);
+			float z = minP.z + (interCell/2) + (page * pageDepth) + (pageDepth/2);
+			//System.out.println("New Cell: " + x + ", " + y + ", " + z);
+			CMSegmentedCell newCell = new CMSegmentedCell(sim, r, new Vector3f(x,y,z), dl);
+			theCells.addObject(newCell);
+			newCell.setCellGravity();
+		}
+		
+		return theCells;
+	}
 	
-	public void collided(CMBioObj c, Vector3f point, long collID){
+	
+	public void collided(CMBioObj c, Vector3f myPoint, Vector3f otherPoint, long collID){
 		//System.out.println("I've collided!");
 	}
 	
@@ -150,10 +197,10 @@ public class CMSegmentedCell implements CMBioObj{
 		return shape;
 	}
 	
-	public RigidBody getRigidBody(){
+	public CMRigidBody getRigidBody(){
 		return body;
 	}
-	public void updateObject(Random r){
+	public void updateObject(){
 		if (!body.isActive()){
 			//System.out.println("Cell " + this.myId + " has been deactivated.");
 			body.activate();

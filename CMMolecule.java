@@ -49,9 +49,11 @@ public class CMMolecule implements CMBioObj{
 	protected float cameraDistance = 20f;
 	private boolean visible = true;
 	private boolean toRemove = false;
+	private CMSimulation sim;
 	
-	public CMMolecule(CMSimulation sim, Vector3f o){
+	public CMMolecule(CMSimulation s, Vector3f o){
 		this.origin = o;
+		this.sim = s;
 		
 		trans = new Transform();
 		trans.setIdentity();
@@ -102,15 +104,15 @@ public class CMMolecule implements CMBioObj{
 		return molShape;
 	}
 	
-	public RigidBody getRigidBody(){
+	public CMRigidBody getRigidBody(){
 		return body;
 	}
 	
-	public void updateObject(Random r){
+	public void updateObject(){
 		//apply a random force to the molecule
-		float magnitude = r.nextFloat() * maxVelChange;
-		float hor_angle = r.nextFloat() * 360;
-		float ver_angle = r.nextFloat() * 360;
+		float magnitude = sim.nextRandomF() * maxVelChange;
+		float hor_angle = sim.nextRandomF() * 360;
+		float ver_angle = sim.nextRandomF() * 360;
 		float y_mag = (float)(magnitude * Math.sin(ver_angle));
 		double h = magnitude * Math.cos(ver_angle);
 		float x_mag = (float)(Math.cos(hor_angle)* h);
@@ -133,7 +135,7 @@ public class CMMolecule implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c, Vector3f v, long collId){
+	public void collided(CMBioObj c, Vector3f v, Vector3f v2, 	long collId){
 		//Do nothing for now.  Molecules don't do anything when they collide
 		//TODO - Should molecules be removed from the simulation when they collide with cells?
 		//System.out.println("Me: " + this.toString() + " It: " + c);

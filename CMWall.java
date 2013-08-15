@@ -74,11 +74,11 @@ public class CMWall implements CMBioObj{
 		return wallShape;
 	}
 	
-	public RigidBody getRigidBody(){
+	public CMRigidBody getRigidBody(){
 		return body;
 	}
 	
-	public void updateObject(Random r){
+	public void updateObject(){
 		//Object doesn't move.  Nothing to update
 	}
 	
@@ -109,7 +109,7 @@ public class CMWall implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c, Vector3f p, long collId){
+	public void collided(CMBioObj c, Vector3f p, Vector3f otherPoint, long collId){
 		//Do nothing for now
 		//TODO - Implement joints with cells
 		//System.out.println("Me: " + this.toString() + " It: " + c);
