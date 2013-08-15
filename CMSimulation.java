@@ -172,8 +172,8 @@ public class CMSimulation extends DemoApplication{
 		dynamicsWorld.setGravity(new Vector3f(0f, 0.0f, 0f));
 		
 		if (assayType == CMAssay.TRANSWELL){
-			chamber = new CMTranswellChamber();
-			chamber.makeChamber(this);
+			chamber = new CMTranswellChamber(this);
+			chamber.makeChamber();
 			objectGroups.add(CMCell.fillSpace(this, NUM_CELLS, chamber.getMinAboveMeshVector(), chamber.getMaxAboveMeshVector(), "RPCs"));
 			//objectGroups.add(CMMolecule.fillSpace(this, NUM_MOLECULES, chamber.getMinBelowMeshVector(), chamber.getMaxBelowMeshVector(), "Netrin"));
 			
@@ -307,6 +307,7 @@ public class CMSimulation extends DemoApplication{
 		int index = 0;
 		while(index < constraints.size()){
 			CMGenericConstraint con = constraints.getQuick(index);
+			con.updateTime();
 			if (!con.isActive()){
 				constraints.remove(index);
 			}
@@ -576,8 +577,8 @@ public class CMSimulation extends DemoApplication{
 		}
 	}
 	
-	public long getCurrentTimeMilliseconds(){
-		return clock.getTimeMilliseconds();
+	public long getCurrentTimeMicroseconds(){
+		return currentTime;
 	}
 	
 	public void setBaseCameraDistance(float d){

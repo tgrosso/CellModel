@@ -31,7 +31,7 @@ public class CMGenericConstraint extends Point2PointConstraint{ // implements CM
 //public class CMGenericConstraint extends Generic6DofConstraint{ // implements CMBioObj {
 	private boolean isActive; //the constraint is active.. either a current constraint or a constraint that needs to be added to the world
 	private int checked; //checks in number of constraints (can keep track of number for destroy method)
-	private Date initialTime; //need to find a way to subtract Date values
+	private long initialTime; //need to find a way to subtract Date values
 	private long life; // amount of time the constraint will last
 	private long collisionID;
 	CMSimulation sim;
@@ -44,6 +44,7 @@ public class CMGenericConstraint extends Point2PointConstraint{ // implements CM
 		isActive = false;
 		checked = 0;
 		collisionID = ID;
+		initialTime = sim.getCurrentTimeMicroseconds();
 		//using Gaussian (normal) distribution
 		//Random lifeGenerator = new Random();
 		//life = (long) ((mu) + (lifeGenerator.nextDouble()) * sd);
@@ -67,12 +68,11 @@ public class CMGenericConstraint extends Point2PointConstraint{ // implements CM
 	}
 	
 	//updating time to see if constraint continues or is broken in next time step
-	public void updateTime(Date currentTime){
-	
-		//if (currentTime - initialTime > life){//how to subtract date.util time?**
-			//isActive = false;
-		//}
-		
+	public void updateTime(){
+		long currentTime = sim.getCurrentTimeMicroseconds();
+		if (currentTime - initialTime > life){
+			isActive = false;
+		}
 	}
 	
 	//need better way to clean this up

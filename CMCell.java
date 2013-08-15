@@ -59,7 +59,7 @@ public class CMCell implements CMBioObj{
 	private int horSegments = verSegments * 2;
 	private int numSegments = horSegments * verSegments;
 	private int[] diffProbs;
-	private int baseProb = 90; //% probability that molecule will bind
+	private int baseProb = 40; //% probability that molecule will bind
 	private int currentProb = baseProb; //For Uniform response, the probability that molecule will bind to the whole cell
 	private int deltaProb = 10;
 	private float[] cumProbs; //Will hold cumulative probabilities for direction of motion
@@ -420,7 +420,7 @@ public class CMCell implements CMBioObj{
 					break;
 			}
 		}
-		else if (c instanceof CMCell){
+		else if ((c instanceof CMCell) || (c instanceof CMWall)){
 			if (sim.nextRandomF() > (float)currentProb/100.0){
 				//molecule does not bind
 				return;
@@ -431,17 +431,10 @@ public class CMCell implements CMBioObj{
 				System.out.println("Cell " + id + " is checking in.");
 			}
 			else{
-				Transform a = new Transform();
-				Transform b = new Transform();
-				body.getMotionState().getWorldTransform(a);
-				c.getRigidBody().getMotionState().getWorldTransform(b);
 				CMGenericConstraint con = new CMGenericConstraint(sim, body, c.getRigidBody(), localPoint, otherPoint, 1000, 20, collId);
 				con.checkIn();
 				System.out.println("Cell " + id + " has made a constraint.");
 			}
-		}
-		else if (c instanceof CMWall){
-			//System.out.println("Collided with Wall");
 		}
 	}
 	

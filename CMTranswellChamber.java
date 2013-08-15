@@ -35,8 +35,10 @@ public class CMTranswellChamber {
 	private float[] meshColor = {.7f, .7f, .9f};
 	private float[] wallColor = {.4f, .2f, .2f};
 	private Vector3f testTubeSize;
+	private CMSimulation sim;
 	
-	public CMTranswellChamber(){
+	public CMTranswellChamber(CMSimulation s){
+		sim = s;
 		setInsetDepth(60f);
 		setMeshThickness(10f);
 		setPoreDensity(100000f);
@@ -103,50 +105,50 @@ public class CMTranswellChamber {
 		return new Vector3f(-(float)(testTubeX/2.0), (float)(meshThick/2.0), -(float)(testTubeZ/2.0));
 	}
 	
-	public void makeChamber(CMSimulation sim){
+	public void makeChamber(){
 		/** 
 		 * Adds the chamber and mesh walls to the simulation
 		 */
 		CMWall nextWall;
 		
 		//botom
-		nextWall = new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, -(testTubeSize.y+wallThick)/2, 0f));
+		nextWall = new CMWall(sim, testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, -(testTubeSize.y+wallThick)/2, 0f));
 		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
 		sim.addBioObject(nextWall);
 		
 		//top
-		nextWall = new CMWall(testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, (testTubeSize.y+wallThick)/2, 0f));
+		nextWall = new CMWall(sim, testTubeSize.x, wallThick, testTubeSize.z, new Vector3f(0f, (testTubeSize.y+wallThick)/2, 0f));
 		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
 		sim.addBioObject(nextWall);
 		
 		//left
-		nextWall = new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f(-(testTubeSize.x+wallThick)/2, 0f, 0f));
+		nextWall = new CMWall(sim, wallThick, testTubeSize.y, testTubeSize.z, new Vector3f(-(testTubeSize.x+wallThick)/2, 0f, 0f));
 		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
 		//nextWall.setVisible(false);
 		sim.addBioObject(nextWall);
 		
 		//right
-		nextWall = new CMWall(wallThick, testTubeSize.y, testTubeSize.z, new Vector3f((testTubeSize.x+wallThick)/2, 0f, 0f));
+		nextWall = new CMWall(sim, wallThick, testTubeSize.y, testTubeSize.z, new Vector3f((testTubeSize.x+wallThick)/2, 0f, 0f));
 		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
 		//nextWall.setVisible(false);
 		sim.addBioObject(nextWall);
 		
 		//back
-		nextWall = new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, (testTubeSize.z + wallThick)/2));
+		nextWall = new CMWall(sim, testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, (testTubeSize.z + wallThick)/2));
 		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
 		//nextWall.setVisible(false);
 		sim.addBioObject(nextWall);
 		
 		//front
-		nextWall = new CMWall(testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, -(testTubeSize.z+wallThick)/2));
+		nextWall = new CMWall(sim, testTubeSize.x, testTubeSize.y, wallThick, new Vector3f(0f, 0f, -(testTubeSize.z+wallThick)/2));
 		nextWall.setVisible(false);
 		sim.addBioObject(nextWall);
 
-		addMesh(sim, testTubeSize.x, testTubeSize.z, meshThick, poreDensity, poreDiameter, wellDepth);
+		addMesh(testTubeSize.x, testTubeSize.z, meshThick, poreDensity, poreDiameter, wellDepth);
 		sim.setCameraDistance(50f);
 	}
 	
-	private void addMesh(CMSimulation sim, float width, float depth, float thickness, float p_density, float p_diameter, float height){
+	private void addMesh(float width, float depth, float thickness, float p_density, float p_diameter, float height){
 		//p_density is pore density - pores/cm^2
 		//p_diameter is pore diameter in micrometers
 		
@@ -165,11 +167,11 @@ public class CMTranswellChamber {
 		//Add row spacers:
 		for (int i = 0; i < numRows; i++){
 			Vector3f wall_origin = new Vector3f(0f, (-testTubeSize.y/2 + height + thickness/2), (depth / 2 - i * (z_space*2+p_diameter) - z_space/2));
-			CMWall wall = new CMWall(width, thickness, z_space, wall_origin);
+			CMWall wall = new CMWall(sim, width, thickness, z_space, wall_origin);
 			wall.setColor(meshColor[0], meshColor[1], meshColor[2]);
 			sim.addBioObject(wall);
 			wall_origin = new Vector3f(0f, (-testTubeSize.y/2 + height + thickness/2), (depth / 2 - i * (z_space*2+p_diameter) -(z_space+p_diameter)- z_space/2 ));
-			wall = new CMWall(width, thickness, z_space, wall_origin);
+			wall = new CMWall(sim, width, thickness, z_space, wall_origin);
 			wall.setColor(meshColor[0], meshColor[1], meshColor[2]);
 			sim.addBioObject(wall);
 		}
@@ -179,11 +181,11 @@ public class CMTranswellChamber {
 			float z_value = depth/2 - z_space - p_diameter/2 - i * (2 * z_space + p_diameter);
 			for (int j = 0; j < numCols; j++){
 				float x_value = width/2 - (j * (2 * x_space + p_diameter)) - x_space/2;
-				CMWall wall = new CMWall(x_space, thickness, p_diameter, new Vector3f(x_value, y_value, z_value));
+				CMWall wall = new CMWall(sim, x_space, thickness, p_diameter, new Vector3f(x_value, y_value, z_value));
 				wall.setColor(meshColor[0], meshColor[1], meshColor[2]);
 				sim.addBioObject(wall);
 				x_value = width/2 - (j * (2 * x_space + p_diameter)) - x_space/2-p_diameter-x_space;
-				wall = new CMWall(x_space, thickness, p_diameter, new Vector3f(x_value, y_value, z_value));
+				wall = new CMWall(sim, x_space, thickness, p_diameter, new Vector3f(x_value, y_value, z_value));
 				wall.setColor(meshColor[0], meshColor[1], meshColor[2]);
 				sim.addBioObject(wall);
 			}

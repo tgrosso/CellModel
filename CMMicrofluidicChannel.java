@@ -34,10 +34,12 @@ public class CMMicrofluidicChannel {
 	private float segmentWidth = 20;
 	private int source = LEFT, sink = RIGHT;
 	private CMBioObjGroup molecules;
+	private CMSimulation sim;
 	
-	public CMMicrofluidicChannel(CMSimulation sim, int srcMols, int snkMols){
+	public CMMicrofluidicChannel(CMSimulation s, int srcMols, int snkMols){
 		sourceMolecules = srcMols;
 		sinkMolecules = snkMols;
+		sim = s;
 		makeChannel(sim);
 	}
 	
@@ -51,25 +53,25 @@ public class CMMicrofluidicChannel {
 		//Make the channel
 		//bottom
 		position.set(0f, -(float)((channelHeight+wallThick)/2.0), 0f);
-		nextWall = new CMWall(channelWidth, wallThick, channelDepth, position); 
+		nextWall = new CMWall(sim, channelWidth, wallThick, channelDepth, position); 
 		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
 		sim.addBioObject(nextWall);
 		
 		//top
 		position.set(0f, (float)((channelHeight+wallThick)/2.0), 0f);
-		nextWall = new CMWall(channelWidth, wallThick, channelDepth, position); 
+		nextWall = new CMWall(sim, channelWidth, wallThick, channelDepth, position); 
 		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
 		sim.addBioObject(nextWall);
 		
 		//back
 		position.set(0f, 0f, (float)((channelDepth+wallThick)/2.0));
-		nextWall = new CMWall(channelWidth, channelHeight, wallThick, position); 
+		nextWall = new CMWall(sim, channelWidth, channelHeight, wallThick, position); 
 		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
 		sim.addBioObject(nextWall);
 		
 		//front
 		position.set(0f, 0f, -(float)((channelDepth+wallThick)/2.0));
-		nextWall = new CMWall(channelWidth, channelHeight, wallThick, position); 
+		nextWall = new CMWall(sim, channelWidth, channelHeight, wallThick, position); 
 		nextWall.setVisible(false);
 		sim.addBioObject(nextWall);
 		
@@ -87,25 +89,25 @@ public class CMMicrofluidicChannel {
 		
 		//bottom
 		position.set(xShift, -(float)((channelHeight+wallThick)/2.0), 0f);
-		nextWall = new CMWall(resWidth, wallThick, channelDepth, position); 
+		nextWall = new CMWall(sim, resWidth, wallThick, channelDepth, position); 
 		nextWall.setColor(resColor[0], resColor[1], resColor[2]);
 		sim.addBioObject(nextWall);
 		
 		//top
 		position.set(xShift, (float)((channelHeight+wallThick)/2.0), 0f);
-		nextWall = new CMWall(resWidth, wallThick, channelDepth, position); 
+		nextWall = new CMWall(sim, resWidth, wallThick, channelDepth, position); 
 		nextWall.setColor(resColor[0], resColor[1], resColor[2]);
 		sim.addBioObject(nextWall);
 		
 		//back
 		position.set(xShift, 0f, (float)((channelDepth+wallThick)/2.0));
-		nextWall = new CMWall(resWidth, channelHeight, wallThick, position); 
+		nextWall = new CMWall(sim, resWidth, channelHeight, wallThick, position); 
 		nextWall.setColor(resColor[0], resColor[1], resColor[2]);
 		sim.addBioObject(nextWall);
 				
 		//front
 		position.set(xShift, 0f, -(float)((channelDepth+wallThick)/2.0));
-		nextWall = new CMWall(resWidth, channelHeight, wallThick, position); 
+		nextWall = new CMWall(sim, resWidth, channelHeight, wallThick, position); 
 		nextWall.setVisible(false);
 		//nextWall.setColor(resColor[0], resColor[1], resColor[2]);
 		
@@ -113,7 +115,7 @@ public class CMMicrofluidicChannel {
 		float xPos = (direction == LEFT)?(float)(xShift  + (resWidth + wallThick)/2.0):
 			(float)(xShift - (resWidth - wallThick)/2.0);
 		position.set(xPos, 0f, 0f);
-		nextWall = new CMWall(wallThick, channelHeight, channelDepth, position);
+		nextWall = new CMWall(sim, wallThick, channelHeight, channelDepth, position);
 		nextWall.setColor(resColor[0], resColor[1], resColor[2]);
 		sim.addBioObject(nextWall);
 	}

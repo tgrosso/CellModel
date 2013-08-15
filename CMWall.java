@@ -44,9 +44,11 @@ public class CMWall implements CMBioObj{
 	private boolean visible = true;
 	private boolean toRemove = false;
 	private int id;
+	private CMSimulation sim;
 	
-	public CMWall(float w, float h, float d, Vector3f o){
+	public CMWall(CMSimulation s, float w, float h, float d, Vector3f o){
 		float mass = 0;
+		sim = s;
 		width = w;
 		height = h;
 		depth = d;
@@ -109,10 +111,19 @@ public class CMWall implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c, Vector3f p, Vector3f otherPoint, long collId){
-		//Do nothing for now
-		//TODO - Implement joints with cells
-		//System.out.println("Me: " + this.toString() + " It: " + c);
+	public void collided(CMBioObj c, Vector3f localPoint, Vector3f otherPoint, long collId){
+		if (c instanceof CMCell){
+			System.out.println("Wall " + id + " is binding to " + c.getID());
+			if (sim.constraintExists(collId)){
+				sim.getConstraint(collId).checkIn();
+				System.out.println("Wall " + id + " is checking in.");
+			}
+			else{
+				CMGenericConstraint con = new CMGenericConstraint(sim, body, c.getRigidBody(), localPoint, otherPoint, 1000, 20, collId);
+				con.checkIn();
+				System.out.println("Wall " + id + " has made a constraint.");
+			}
+		}
 	}
 	
 	public boolean specialRender(IGL gl, Transform t){
