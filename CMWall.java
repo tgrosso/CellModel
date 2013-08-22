@@ -15,7 +15,7 @@
  */
 package cellModel;
 
-
+import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.collision.shapes.BoxShape;
 import com.bulletphysics.demos.opengl.IGL;
@@ -35,11 +35,11 @@ import org.lwjgl.opengl.GL11;
 
 public class CMWall implements CMBioObj{
 	private static int wall_ids = 0;
-	private CMRigidBody body;
+	protected CMRigidBody body;
 	private BoxShape wallShape;
 	private Vector3f origin;
 	private float[] wallColor = {.4f, 0.2f, 0.2f, 1f};
-	private float width, height, depth;
+	protected float width, height, depth;
 	private static FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
 	private boolean visible = true;
 	private boolean toRemove = false;
@@ -111,17 +111,27 @@ public class CMWall implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c, Vector3f localPoint, Vector3f otherPoint, long collId){
+	public void collided(CMBioObj c, ManifoldPoint pt, boolean isObjA, long collId){
+		Vector3f localPoint = new Vector3f();
+		Vector3f otherPoint = new Vector3f();
+		if (isObjA){
+			localPoint.set(pt.localPointA);
+			otherPoint.set(pt.localPointB);
+		}
+		else{
+			localPoint.set(pt.localPointB);
+			otherPoint.set(pt.localPointA);
+		}
 		if (c instanceof CMCell){
-			System.out.println("Wall " + id + " is binding to " + c.getID());
+			//System.out.println("Wall " + id + " is binding to " + c.getID());
 			if (sim.constraintExists(collId)){
 				sim.getConstraint(collId).checkIn();
-				System.out.println("Wall " + id + " is checking in.");
+				//System.out.println("Wall " + id + " is checking in.");
 			}
 			else{
 				CMGenericConstraint con = new CMGenericConstraint(sim, body, c.getRigidBody(), localPoint, otherPoint, 1000, 20, collId);
 				con.checkIn();
-				System.out.println("Wall " + id + " has made a constraint.");
+				//System.out.println("Wall " + id + " has made a constraint.");
 			}
 		}
 	}

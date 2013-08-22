@@ -16,6 +16,7 @@
  */
 package cellModel;
 
+import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.dynamics.RigidBody;
@@ -28,7 +29,7 @@ import javax.vecmath.Vector3f;
 
 public interface CMBioObj {
 	
-	public void collided(CMBioObj c, Vector3f point, Vector3f point2, long collID);
+	public void collided(CMBioObj c, ManifoldPoint mp, boolean isObjA, long collID);
 	public void addConstraint(CMGenericConstraint c);
 	public void removeConstraint(CMGenericConstraint c);
 	public CollisionShape getCollisionShape();

@@ -73,6 +73,7 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.File;
+import java.nio.ByteBuffer;
 
 /**
  * BasicDemo is good starting point for learning the code base and porting.
@@ -84,8 +85,8 @@ public class CMSimulation extends DemoApplication{
 
 	// maximum number of objects (test tube walls and apparatus, molecules and cells)
 	private static final int NUM_MOLECULES = 1500;
-	private static final int NUM_CELLS = 5;
-	private final CMAssay assayType = CMAssay.TRANSWELL;
+	private static final int NUM_CELLS = 20;
+	private final CMAssay assayType = CMAssay.MICROFLUIDIC;
 	
 	private static CMTranswellChamber chamber;
 	private static CMMicrofluidicChannel channel;
@@ -107,6 +108,7 @@ public class CMSimulation extends DemoApplication{
 	private long collisionID = 0L;
 	private double summaryDelay = 1000; //Minimum number of milliseconds between summary reports
 	private long startTime, currentTime, lastWriteTime;
+	private long imageDelay, lastImageTime;
 	private File dataDir = null;
 	private BufferedWriter summaryFile = null, positionFile = null, concentrationFile = null;
 	SimpleDateFormat summaryFormat = new SimpleDateFormat("HH:mm:ss:SSS");
@@ -144,6 +146,8 @@ public class CMSimulation extends DemoApplication{
 		
 		startTime = clock.getTimeMicroseconds(); //clock is inherited from DemoApplication
 		lastWriteTime = startTime;
+		imageDelay = 1000000/30; //number of microseconds between image captures 
+		lastImageTime = startTime; //last time an image was captured
 		summaryFormat.setTimeZone(TimeZone.getTimeZone("GMT")); //To get the right time formats, need Grenwhich Mean Time
 	}
 	
@@ -174,11 +178,11 @@ public class CMSimulation extends DemoApplication{
 		if (assayType == CMAssay.TRANSWELL){
 			chamber = new CMTranswellChamber(this);
 			chamber.makeChamber();
-			objectGroups.add(CMCell.fillSpace(this, NUM_CELLS, chamber.getMinAboveMeshVector(), chamber.getMaxAboveMeshVector(), "RPCs"));
+			//objectGroups.add(CMCell.fillSpace(this, NUM_CELLS, chamber.getMinAboveMeshVector(), chamber.getMaxAboveMeshVector(), "RPCs"));
 			//objectGroups.add(CMMolecule.fillSpace(this, NUM_MOLECULES, chamber.getMinBelowMeshVector(), chamber.getMaxBelowMeshVector(), "Netrin"));
 			
-			/*
-			CMSegmentedCell cell1 = new CMSegmentedCell(this, 5f, new Vector3f(5f, 20f, 0f), 0); 
+			
+			CMSegmentedCell cell1 = new CMSegmentedCell(this, 5f, new Vector3f(5f, 20f, 0f), 1); 
 			addBioObject(cell1);
 			cell1.setCellGravity();
 			
@@ -187,10 +191,10 @@ public class CMSimulation extends DemoApplication{
 			addBioObject(cell2);
 			cell2.setCellGravity();
 			
-			CMSegmentedCell cell3 = new CMSegmentedCell(this, 5f, new Vector3f(6f, 10f, 0f), 2); 
+			CMSegmentedCell cell3 = new CMSegmentedCell(this, 5f, new Vector3f(6f, 10f, 0f), 1); 
 			addBioObject(cell3);
 			cell3.setCellGravity();
-			
+			/*
 			CMSegmentedCell cell4 = new CMSegmentedCell(this, 5f, new Vector3f(15f, 10f, 0f), 3); 
 			addBioObject(cell4);
 			cell4.setCellGravity();
@@ -201,18 +205,11 @@ public class CMSimulation extends DemoApplication{
 			*/
 		}
 		
-		else if(assayType == CMAssay.MICROFULIDIC){
+		else if(assayType == CMAssay.MICROFLUIDIC){
 			int numSourceMols = 1000;
 			int numSinkMols = 0;
 			channel = new CMMicrofluidicChannel(this, numSourceMols, numSinkMols);
-			channelMols = CMMolecule.fillSpace(this, numSourceMols, 
-				channel.getMinReservoirVector(CMMicrofluidicChannel.LEFT), 
-				channel.getMaxReservoirVector(CMMicrofluidicChannel.LEFT), "ChemoAttr");
-			CMBioObjGroup sinkMols = CMMolecule.fillSpace(this, numSinkMols, 
-					channel.getMinReservoirVector(CMMicrofluidicChannel.RIGHT), 
-					channel.getMaxReservoirVector(CMMicrofluidicChannel.RIGHT), "ChemoAttr");
-			channelMols.transferGroup(sinkMols); //sinkMols is now null
-			objectGroups.add(channelMols);
+			objectGroups.add(CMCell.fillSpace(this, NUM_CELLS, channel.getMinChannelVector(), channel.getMaxChannelVector(), "RPCs"));
 		}
 		
 		if (needGImpact){
@@ -270,19 +267,8 @@ public class CMSimulation extends DemoApplication{
 				for (int j=0; j<numContacts; j++){
 					ManifoldPoint pt = contactManifold.getContactPoint(j);
 					if (pt.getDistance()<0f){
-						Vector3f localA = new Vector3f(0f, 0f, 0f);
-						localA.set(pt.localPointA);
-						//Vector3f com = new Vector3f(0f, 0f, 0f);
-						//objA.getCenterOfMassPosition(com);
-						//Vector3f worldA = new Vector3f(0f, 0f, 0f);
-						//pt.getPositionWorldOnA(worldA);
-						//if (objA.getParent().getType().equals("Cell")){
-						//	System.out.println(com + ", " + pt.localPointA + ", " + worldA);
-						//}
-						Vector3f localB = new Vector3f(0f, 0f, 0f);
-						localB.set(pt.localPointB);
-						objA.getParent().collided(objB.getParent(), localA, localB, collisionID);
-						objB.getParent().collided(objA.getParent(), localB, localA,  collisionID);
+						objA.getParent().collided(objB.getParent(), pt, true, collisionID);
+						objB.getParent().collided(objA.getParent(), pt, false,  collisionID);
 						collisionID++;
 						if (collisionID >= Long.MAX_VALUE){
 							collisionID = 0L;
@@ -291,10 +277,6 @@ public class CMSimulation extends DemoApplication{
 					}
 				}
 			}
-		}
-		
-		if (assayType == CMAssay.MICROFULIDIC){
-			channel.updateChannel(this, channelMols);
 		}
 		
 		//remove objects marked for removal
@@ -534,10 +516,10 @@ public class CMSimulation extends DemoApplication{
 			}
 		}
 		
-		if (assayType == CMAssay.MICROFULIDIC){
+		if (assayType == CMAssay.MICROFLUIDIC){
 			try{
 				concentrationFile.write(nowString + "\t");
-				channel.writeConcentrationData(concentrationFile, channelMols);
+				channel.writeConcentrationData(concentrationFile, currentTime);
 				concentrationFile.newLine();
 				concentrationFile.flush();
 			}
@@ -583,6 +565,20 @@ public class CMSimulation extends DemoApplication{
 	
 	public void setBaseCameraDistance(float d){
 		baseCameraDistance = d;
+	}
+	
+	public boolean timeToTakeScreenshot(){
+		if (currentTime - lastWriteTime > imageDelay){
+			lastWriteTime = currentTime;
+			return true;
+		}
+		else{
+			return false;
+		}
+	}
+	
+	public void outputImage(ByteBuffer b){
+		
 	}
 	
 	public void wrapUp(){

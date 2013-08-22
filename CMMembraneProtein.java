@@ -1,8 +1,8 @@
 /**
  * Copyright (C) 2013 Terri A. Grosso, Naralys Batista, Nancy Griffeth
  * Package: cellModel
- * File: CMAssay.java
- * Jul 27, 2013 12:19:46 PM
+ * File: CMMembraneProtein.java
+ * Aug 21, 2013 2:30:04 PM
  *
  *   Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
  *
@@ -18,6 +18,6 @@ package cellModel;
  * @author tagsit
  *
  */
-public enum CMAssay {
-	TRANSWELL, MICROFLUIDIC
+public interface CMMembraneProtein {
+	public float[] getBaseColor();
 }

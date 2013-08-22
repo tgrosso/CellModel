@@ -21,6 +21,7 @@ import javax.vecmath.Vector3f;
 
 import org.lwjgl.util.glu.Sphere;
 
+import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.collision.shapes.SphereShape;
 import com.bulletphysics.demos.opengl.IGL;
@@ -39,7 +40,7 @@ public class CMCell implements CMBioObj{
 	private static float mass = density * volume;
 	private static float maxVelChange = 0.3f;
 	private static int cell_ids = 0;
-	private int molResponse = NO_RESPONSE;
+	private int molResponse = UNIFORM_RESPONSE;
 	private int id;
 	private Vector3f origin;
 	private static SphereShape cellShape = new SphereShape(radius);
@@ -334,10 +335,21 @@ public class CMCell implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c, Vector3f localPoint, Vector3f otherPoint, long collId){
-		//Find the vector to the collision point
+	public void collided(CMBioObj c, ManifoldPoint pt, boolean isObjA, long collId){
+		Vector3f localPoint = new Vector3f();
+		Vector3f otherPoint = new Vector3f();
 		Vector3f newVel = new Vector3f();
-		newVel.set(localPoint);
+		if (isObjA){
+			localPoint.set(pt.localPointA);
+			otherPoint.set(pt.localPointB);
+			newVel.set(pt.localPointA);
+		}
+		else{
+			localPoint.set(pt.localPointB);
+			otherPoint.set(pt.localPointA);
+			newVel.set(pt.localPointB);
+		}
+		
 		if (c instanceof CMMolecule){
 			switch (molResponse){
 				case NO_RESPONSE:
@@ -375,47 +387,6 @@ public class CMCell implements CMBioObj{
 					newVel.add(oldVel);
 					body.setLinearVelocity(newVel);
 					break;
-				case DIFFERENTIAL_RESPONSE:
-					//The probabilities at the horizontal and vertical angles change
-					//Find the vertical segment
-					float verAngle = (float)(Math.asin(newVel.y/newVel.length()));
-					double h = Math.cos(verAngle) * newVel.length();
-					verAngle = (float)Math.toDegrees(verAngle);
-					int verSegment = (int)((verAngle + 90) / verDegPerSeg);
-					assert verSegment < verSegments : "Vertical Segment > verSegments";
-					
-					float horAngle = (float)(Math.acos(newVel.x/h));
-					horAngle = (float)Math.toDegrees(horAngle);
-					//Adjust to an angle between 0 and 2 * PI
-					if (newVel.z < 0){
-						horAngle = 360 - horAngle;
-					}
-					int horSegment = (int)(horAngle / horDegPerSeg);
-					
-					int index = horSegments * verSegment + horSegment;
-					
-					//See if molecule binds
-					if (sim.nextRandomF() > (float)diffProbs[index]/100.0){
-						//molecule does not bind
-						return;
-					}
-					//See if molecule has already been marked for removal
-					if (c.isMarked()){
-						return;
-					}
-					//System.out.println("Molecule bound");
-					c.markForRemoval();
-					
-					diffProbs[index] += deltaProb;
-					if (diffProbs[index] > 100){
-						diffProbs[index] = 100;
-					}
-					
-					
-					//System.out.println("Vector: " + newVel + " verAngle: " + verAngle + " verSegment: " + verSegment);
-					//System.out.println("horAngle: " + horAngle + " horSegment: " + horSegment);
-					
-					break;
 				default:
 					break;
 			}
@@ -425,15 +396,15 @@ public class CMCell implements CMBioObj{
 				//molecule does not bind
 				return;
 			}
-			System.out.println("Cell " + id + " is binding to " + c.getID());
+			//System.out.println("Cell " + id + " is binding to " + c.getID());
 			if (sim.constraintExists(collId)){
 				sim.getConstraint(collId).checkIn();
-				System.out.println("Cell " + id + " is checking in.");
+				//System.out.println("Cell " + id + " is checking in.");
 			}
 			else{
 				CMGenericConstraint con = new CMGenericConstraint(sim, body, c.getRigidBody(), localPoint, otherPoint, 1000, 20, collId);
 				con.checkIn();
-				System.out.println("Cell " + id + " has made a constraint.");
+				//System.out.println("Cell " + id + " has made a constraint.");
 			}
 		}
 	}

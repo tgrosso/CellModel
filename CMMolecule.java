@@ -16,6 +16,7 @@
 
 package cellModel;
 
+import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.SphereShape;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import javax.vecmath.Vector3f;
@@ -135,10 +136,8 @@ public class CMMolecule implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c, Vector3f v, Vector3f v2, 	long collId){
+	public void collided(CMBioObj c, ManifoldPoint pt, boolean isObjA, long collId){
 		//Do nothing for now.  Molecules don't do anything when they collide
-		//TODO - Should molecules be removed from the simulation when they collide with cells?
-		//System.out.println("Me: " + this.toString() + " It: " + c);
 	}
 	
 	public boolean specialRender(IGL gl, Transform t){

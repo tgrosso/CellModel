@@ -20,6 +20,7 @@ import java.util.Random;
 
 import javax.vecmath.Vector3f;
 
+import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.extras.gimpact.GImpactMeshShape;
 import com.bulletphysics.collision.shapes.TriangleCallback;
@@ -109,7 +110,8 @@ public class CMSegmentedCell implements CMBioObj{
 		for (int i = 0; i < numSegments; i++){
 			color[i] = new float[3];
 			for (int j = 0; j < 3; j++){
-				color[i][j] = (float)Math.random();
+				//color[i][j] = (float)Math.random();
+				color[i][j] = 1.0f;
 			}
 		}
 		
@@ -173,8 +175,7 @@ public class CMSegmentedCell implements CMBioObj{
 	}
 	
 	
-	public void collided(CMBioObj c, Vector3f myPoint, Vector3f otherPoint, long collID){
-		//System.out.println("I've collided!");
+	public void collided(CMBioObj c, ManifoldPoint pt, boolean isObjA, long collID){
 	}
 	
 	public boolean specialRender(IGL gl, Transform t){
@@ -191,6 +192,12 @@ public class CMSegmentedCell implements CMBioObj{
 	
 	public float[] getSegmentColor(int segment){
 		return color[segment];
+	}
+	
+	public void setSegmentColor(int segment, float r, float g, float b){
+		color[segment][0] = r;
+		color[segment][1] = g;
+		color[segment][2] = b;
 	}
 	
 	public CollisionShape getCollisionShape(){

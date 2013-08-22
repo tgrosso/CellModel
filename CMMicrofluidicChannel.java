@@ -17,30 +17,37 @@ package cellModel;
 import javax.vecmath.Vector3f;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import com.bulletphysics.collision.dispatch.CollisionFlags;
+import com.bulletphysics.collision.narrowphase.ManifoldPoint;
+import com.bulletphysics.demos.opengl.IGL;
+import com.bulletphysics.linearmath.Transform;
+
+import static com.bulletphysics.demos.opengl.IGL.*;
 
 /**
  * @author tagsit
  *
  */
 public class CMMicrofluidicChannel {
-	public static final int LEFT = 0, RIGHT = 1;
 	private float wallThick = 2f;
 	private float channelWidth = 1000f, channelHeight = 100f, channelDepth = 90f;
-	private float resWidth = 100;
-	private int sourceMolecules, sinkMolecules;
+	private int sourceConcentration, sinkConcentration;
 	private float[] wallColor = {.4f, .2f, .2f};
-	private float[] resColor = {.2f, .2f, .4f};
-	private int numSegments = 5;
-	private float segmentWidth = 20;
-	private int source = LEFT, sink = RIGHT;
-	private CMBioObjGroup molecules;
+	private float[] baseConcColor = {.4f, .2f, .2f};
+	private int measureSegments = 5;
 	private CMSimulation sim;
+	private CMBioObjGroup cells;
+	private boolean ligandAdded;
+	private long currentTime;
 	
-	public CMMicrofluidicChannel(CMSimulation s, int srcMols, int snkMols){
-		sourceMolecules = srcMols;
-		sinkMolecules = snkMols;
+	public CMMicrofluidicChannel(CMSimulation s, int srcConc, int snkConc){
+		sourceConcentration = srcConc;
+		sinkConcentration = snkConc;
+		ligandAdded = false;
 		sim = s;
 		makeChannel(sim);
+		currentTime = 0L;
 	}
 	
 	public void makeChannel(CMSimulation sim){
@@ -69,106 +76,64 @@ public class CMMicrofluidicChannel {
 		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
 		sim.addBioObject(nextWall);
 		
+		//left
+		position.set((float)((channelWidth+wallThick)/2.0), 0f, 0f);
+		nextWall = new CMWall(sim, wallThick, channelHeight, channelDepth, position);
+		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
+		sim.addBioObject(nextWall);
+		
+		//right
+		position.set((float)(-(channelWidth+wallThick)/2.0), 0f, 0f);
+		nextWall = new CMWall(sim, wallThick, channelHeight, channelDepth, position);
+		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
+		sim.addBioObject(nextWall);
+		
 		//front
 		position.set(0f, 0f, -(float)((channelDepth+wallThick)/2.0));
 		nextWall = new CMWall(sim, channelWidth, channelHeight, wallThick, position); 
 		nextWall.setVisible(false);
 		sim.addBioObject(nextWall);
 		
-		makeReservoir(sim, LEFT);
-		makeReservoir(sim, RIGHT);
+		//sim.addBioObject(new InnerConcentration(sim, channelWidth, channelHeight, 1.0f, new Vector3f(0f, 0f, -(float)((channelDepth + wallThick)/2.0)), this));
 		
 		sim.setBaseCameraDistance(600f);
 	}
 	
-	private void makeReservoir(CMSimulation sim, int direction){
-		CMWall nextWall;
-		Vector3f position = new Vector3f(0f, 0f, 0f);
-		float absShift = (float)((channelWidth + resWidth)/2.0);
-		float xShift = (direction == LEFT) ? (absShift) : (-absShift);
-		
-		//bottom
-		position.set(xShift, -(float)((channelHeight+wallThick)/2.0), 0f);
-		nextWall = new CMWall(sim, resWidth, wallThick, channelDepth, position); 
-		nextWall.setColor(resColor[0], resColor[1], resColor[2]);
-		sim.addBioObject(nextWall);
-		
-		//top
-		position.set(xShift, (float)((channelHeight+wallThick)/2.0), 0f);
-		nextWall = new CMWall(sim, resWidth, wallThick, channelDepth, position); 
-		nextWall.setColor(resColor[0], resColor[1], resColor[2]);
-		sim.addBioObject(nextWall);
-		
-		//back
-		position.set(xShift, 0f, (float)((channelDepth+wallThick)/2.0));
-		nextWall = new CMWall(sim, resWidth, channelHeight, wallThick, position); 
-		nextWall.setColor(resColor[0], resColor[1], resColor[2]);
-		sim.addBioObject(nextWall);
-				
-		//front
-		position.set(xShift, 0f, -(float)((channelDepth+wallThick)/2.0));
-		nextWall = new CMWall(sim, resWidth, channelHeight, wallThick, position); 
-		nextWall.setVisible(false);
-		//nextWall.setColor(resColor[0], resColor[1], resColor[2]);
-		
-		//side
-		float xPos = (direction == LEFT)?(float)(xShift  + (resWidth + wallThick)/2.0):
-			(float)(xShift - (resWidth - wallThick)/2.0);
-		position.set(xPos, 0f, 0f);
-		nextWall = new CMWall(sim, wallThick, channelHeight, channelDepth, position);
-		nextWall.setColor(resColor[0], resColor[1], resColor[2]);
-		sim.addBioObject(nextWall);
+	public void addLigand(){
+		ligandAdded = true;
 	}
 	
-	public void setSource(int numObjects, int direction){
-		source = direction;
-		sourceMolecules = numObjects;
+	public void setTime(long time){
+		currentTime = time;
 	}
 	
-	public void setSink(int numObjects, int direction){
-		sink = direction;
-		sinkMolecules = numObjects;
-	}
-	
-	public void updateChannel(CMSimulation sim, CMBioObjGroup group){
-		updateReservoir(sim, LEFT, group);
-		updateReservoir(sim, RIGHT, group);
-		//System.out.println("Number of Molecules: " + group.getNumMembers());
-	}
-	
-	public void updateReservoir(CMSimulation sim, int direction, CMBioObjGroup group){
-		//Find the current number of molecules in the reservoir
-		int numObj = group.getNumObjectsInside(group.getName(), getMinReservoirVector(direction), 
-				getMaxReservoirVector(direction));
-		int target = (direction == source) ? sourceMolecules : sinkMolecules;
-		if (numObj < target){
-			//add objects here
-			CMBioObjGroup newGroup = CMMolecule.fillSpace(sim, (target-numObj), 
-					getMinReservoirVector(direction), getMaxReservoirVector(direction), 
-					group.getName());
-			group.transferGroup(newGroup);
+	public float getConcentration(long timeMs, float distFromSource){
+		if (!ligandAdded){
+			//No ligand added yet
+			return 0f;
 		}
-		if (numObj > target){
-			//remove random objects here - may not remove the exact number of objects
-			int numToRemove = numObj - target;
-			for (int i = 0; i < numToRemove; i++){
-				int rand = (int)(sim.nextRandomF() * numObj);
-				CMBioObj obj = group.getObject(rand);
-				obj.markForRemoval();
-			}
-		}
+		return 0f;
 	}
 	
-	public void writeConcentrationData(BufferedWriter output, CMBioObjGroup group){
-		//System.out.println("Writing Concentration Data");
-		//System.out.println(numSegments);
-		String out = group.getNumMembers() + "\t";
-		for (int i = 0; i < numSegments; i++){
-			int numObj = group.getNumObjectsInside(group.getName(), getMinSegmentVector(i), 
-					getMaxSegmentVector(i));
-			out += numObj + "\t";
+	public Vector3f getMinChannelVector(){
+		Vector3f minVector = new Vector3f();
+		minVector.set((float)(-channelWidth/2.0),(float)(-channelHeight/2.0), (float)(-channelDepth/2.0));
+		return minVector;
+	}
+	
+	public Vector3f getMaxChannelVector(){
+		Vector3f maxVector = new Vector3f();
+		maxVector.set((float)(channelWidth/2.0),(float)(channelHeight/2.0), (float)(channelDepth/2.0));
+		return maxVector;
+	}
+	
+	public void writeConcentrationData(BufferedWriter output, long time){
+		String out = "";
+		float distanceBetweenMeasures = channelWidth / (measureSegments-1);
+		for (int i = 0; i < measureSegments; i++){
+			out += getConcentration(time, i * distanceBetweenMeasures) + "\t";
 		}
-		//System.out.println(out);
+		out += getConcentration(time, channelWidth);
 		try{
 			output.write(out);
 		}
@@ -179,59 +144,84 @@ public class CMMicrofluidicChannel {
 		
 	}
 	
-	public Vector3f getMinReservoirVector(int direction){
-		Vector3f minVector = new Vector3f(0f, 0f, 0f);
-		float xpos, ypos, zpos;
-		if (direction == LEFT){
-			xpos = (float)(channelWidth/2.0);
+	private class InnerConcentration extends CMWall{
+		private float[] glMat = new float[16];
+		private int drawnSegments;
+		CMMicrofluidicChannel channel;
+		ByteBuffer buf;
+		//Stippling method based on that found here: http://lwjgl.org/forum/index.php?action=printpage;topic=1528.0
+		
+		private byte halftone[] = {
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55,
+			    (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0xAA, (byte)0x55, (byte)0x55, (byte)0x55, (byte)0x55};
+		
+		public InnerConcentration(CMSimulation s, float w, float h, float d, Vector3f o, CMMicrofluidicChannel mc){
+			super(s, w, h, d, o);
+			body.setCollisionFlags(body.getCollisionFlags()|CollisionFlags.NO_CONTACT_RESPONSE);
+			drawnSegments = 1000;
+			channel = mc;
+			buf = ByteBuffer.allocateDirect(1024+128);
+			buf.put(halftone);
+			buf.rewind();
 		}
-		else{
-			xpos = -(float)(channelWidth/2.0 + resWidth);
+		public void collided(CMBioObj c, ManifoldPoint pt, boolean isObjA, long collId){
+			System.out.println("Collision with innerConcentration");
 		}
-		ypos = -(float)(channelHeight/2.0);
-		zpos = -(float)(channelDepth/2.0);
-		minVector.set(xpos, ypos, zpos);
-		return minVector;
-	}
-	
-	public Vector3f getMaxReservoirVector(int direction){
-		Vector3f maxVector = new Vector3f(0f, 0f, 0f);
-		float xpos, ypos, zpos;
-		if (direction == LEFT){
-			xpos = (float)(channelWidth/2.0 + resWidth);
+		public boolean specialRender(IGL gl, Transform t){
+			//This just draws an overlay in front of 
+			gl.glPushMatrix();
+			t.getOpenGLMatrix(glMat);
+			gl.glMultMatrix(glMat);
+			gl.glBegin(GL_QUADS);
+			for (int i = 0; i < drawnSegments; i++){
+				float leftEdge = i * width/drawnSegments;
+				float leftPercent = channel.getConcentration(channel.currentTime, leftEdge)/channel.sourceConcentration;
+				
+				float rightEdge = (i + 1) * width/drawnSegments;
+				float rightPercent = channel.getConcentration(channel.currentTime, rightEdge)/channel.sourceConcentration;
+				
+				float baseRed = channel.baseConcColor[0];
+				float remainRed = 1.0f - baseRed;
+				float baseGreen = channel.baseConcColor[1];
+				float remainGreen = 1.0f - baseGreen;
+				float baseBlue = channel.baseConcColor[2];
+				float remainBlue = 1.0f - baseBlue;
+				
+				gl.glColor3f(baseRed + leftPercent * remainRed, 
+						baseGreen + leftPercent * remainGreen,
+						baseBlue + leftPercent * remainBlue);
+				//bottom left
+				gl.glVertex3f(-leftEdge, -(float)(channelHeight/2.0), -(float)(channelDepth/2.0));
+				//top left
+				gl.glVertex3f(-leftEdge, (float)(channelHeight/2.0), -(float)(channelDepth/2.0));
+				
+				gl.glColor3f(baseRed + rightPercent * remainRed, 
+						baseGreen + rightPercent * remainGreen,
+						baseBlue + rightPercent * remainBlue);
+				
+				//top right
+				gl.glVertex3f(leftEdge, (float)(channelHeight/2.0), -(float)(channelDepth/2.0));
+				//bottom right
+				gl.glVertex3f(leftEdge, -(float)(channelHeight/2.0), -(float)(channelDepth/2.0));
+			}
+			gl.glEnd();
+			gl.glPopMatrix();
+			
+			return true;
 		}
-		else{
-			xpos = -(float)(channelWidth/2.0);
-		}
-		ypos = (float)(channelHeight/2.0);
-		zpos = (float)(channelDepth/2.0);
-		maxVector.set(xpos, ypos, zpos);
-		return maxVector;
-	}
-	
-	public Vector3f getMinSegmentVector(int segment){
-		float interspace = (float)(channelWidth/numSegments);
-		float startX = -(float)(channelWidth/2.0);
-		float xpos = startX + (segment * interspace);
-		float ypos = -(float)(channelHeight/2.0);
-		float zpos = -(float)(channelDepth/2.0);
-		Vector3f minVector = new Vector3f(xpos, ypos, zpos);
-		//System.out.println("   Min Segment " + segment + ": " + minVector);
-		return minVector;
-	}
-	
-	public Vector3f getMaxSegmentVector(int segment){
-		float interspace = (float)(channelWidth/numSegments);
-		float startX = -(float)(channelWidth/2.0);
-		float xpos = startX + ((segment+1) * interspace);
-		float ypos = (float)(channelHeight/2.0);
-		float zpos = (float)(channelDepth/2.0);
-		Vector3f maxVector = new Vector3f(xpos, ypos, zpos);
-		//System.out.println("   Max Segment " + segment + ": " + maxVector);
-		return maxVector;
-	}
-	
-	public int getNumberSegments(){
-		return numSegments;
 	}
 }
