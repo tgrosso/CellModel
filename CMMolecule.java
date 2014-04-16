@@ -50,6 +50,7 @@ public class CMMolecule implements CMBioObj{
 	protected float cameraDistance = 20f;
 	private boolean visible = true;
 	private boolean toRemove = false;
+	private boolean bound = false;
 	private CMSimulation sim;
 	
 	public CMMolecule(CMSimulation s, Vector3f o){
@@ -136,7 +137,7 @@ public class CMMolecule implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c, ManifoldPoint pt, boolean isObjA, long collId){
+	public void collided(CMBioObj c, ManifoldPoint pt, long collId){
 		//Do nothing for now.  Molecules don't do anything when they collide
 	}
 	
@@ -171,14 +172,6 @@ public class CMMolecule implements CMBioObj{
 		return mass;
 	}
 	
-	public void addConstraint(CMGenericConstraint c){
-		
-	}
-	
-	public void removeConstraint(CMGenericConstraint c){
-		
-	}
-	
 	public void destroy(){
 		body.destroy();
 	}
@@ -189,5 +182,15 @@ public class CMMolecule implements CMBioObj{
 	
 	public boolean isMarked(){
 		return toRemove;
+	}
+	
+	public boolean isBound(){
+		return bound;
+	}
+	public void clearBound(){
+		bound = false;
+	}
+	public void bind(){
+		bound = true;
 	}
 }

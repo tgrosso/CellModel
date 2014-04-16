@@ -145,7 +145,7 @@ public class CMTranswellChamber {
 		sim.addBioObject(nextWall);
 
 		addMesh(testTubeSize.x, testTubeSize.z, meshThick, poreDensity, poreDiameter, wellDepth);
-		sim.setCameraDistance(50f);
+		sim.setCameraDistance(100f);
 	}
 	
 	private void addMesh(float width, float depth, float thickness, float p_density, float p_diameter, float height){

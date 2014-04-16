@@ -1,0 +1,44 @@
+function pdex1
+
+m = 0;
+min_x = <<min_x>>
+max_x = <<max_x>>
+x_steps = <<x_steps>>
+x = linspace(min_x, max_x, x_steps);
+
+min_t = <<min_t>>
+max_t = <<max_t>>
+t_steps = <<t_steps>>
+t = linspace(min_t, max_t, t_steps);
+
+sol = pdepe(m,@pdex1pde,@pdex1ic,@pdex1bc,x,t);
+
+u = sol(:,:,1);
+
+csv_file = <<csv_file>>
+csvwrite(csv_file, u)
+
+% --------------------------------------------------------------
+function [c,f,s] = pdex1pde(x,t,u,DuDx)
+c = 1;
+f =2.0e-10*DuDx;
+s = 0;
+% --------------------------------------------------------------
+function u0 = pdex1ic(x)
+
+source_conc = <<source_conc>>
+maxx = <<max_x>>
+
+if x >= maxx
+ u0=source_conc;
+else u0 = 0;
+end
+    
+
+% --------------------------------------------------------------
+function [pl,ql,pr,qr] = pdex1bc(xl,ul,xr,ur,t)
+sconc = <<sconc>>
+pl = ul;
+ql = 0;
+pr = ur-sconc;
+qr = 0;

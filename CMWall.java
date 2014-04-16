@@ -15,6 +15,7 @@
  */
 package cellModel;
 
+import com.bulletphysics.BulletGlobals;
 import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.collision.shapes.BoxShape;
@@ -23,7 +24,9 @@ import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.linearmath.Transform;
 import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
+import com.bulletphysics.dynamics.constraintsolver.RotationalLimitMotor;
 import com.bulletphysics.util.ObjectArrayList;
+import javax.vecmath.Matrix3f;
 
 import java.nio.FloatBuffer;
 import java.util.Random;
@@ -45,6 +48,11 @@ public class CMWall implements CMBioObj{
 	private boolean toRemove = false;
 	private int id;
 	private CMSimulation sim;
+	private boolean bound = false;
+	private float lamininReactionRate = (float)(6.42 * Math.pow(10, -9));
+	private float lamininSurfaceDensity; //molecules per micron^2
+	private long lastTimeMilliseconds, currentTimeMilliseconds;
+	private boolean hasLaminin;
 	
 	public CMWall(CMSimulation s, float w, float h, float d, Vector3f o){
 		float mass = 0;
@@ -56,6 +64,9 @@ public class CMWall implements CMBioObj{
 		Transform t = new Transform();
 		t.setIdentity();
 		t.origin.set(origin);
+		lamininSurfaceDensity = 700;
+		currentTimeMilliseconds = sim.getCurrentTimeMicroseconds()/1000;
+		hasLaminin = false;
 		
 		Vector3f localInertia = new Vector3f(0, 0, 0);
 		wallShape = new BoxShape(new Vector3f(width/2, height/2, depth/2));
@@ -72,6 +83,18 @@ public class CMWall implements CMBioObj{
 		
 	}
 	
+	public void addLaminin(){
+		hasLaminin = true;
+	}
+	
+	public boolean isLamininCoated(){
+		return hasLaminin;
+	}
+	
+	public float getLamininDensity(){
+		return lamininSurfaceDensity;
+	}
+	
 	public CollisionShape getCollisionShape(){
 		return wallShape;
 	}
@@ -81,7 +104,12 @@ public class CMWall implements CMBioObj{
 	}
 	
 	public void updateObject(){
-		//Object doesn't move.  Nothing to update
+		//update laminin surface concentration
+		lastTimeMilliseconds = currentTimeMilliseconds;
+		currentTimeMilliseconds = sim.getCurrentTimeMicroseconds()/1000;
+		long deltaTime = currentTimeMilliseconds - lastTimeMilliseconds;
+		float deltaLaminin = lamininSurfaceDensity * lamininReactionRate;
+		lamininSurfaceDensity = lamininSurfaceDensity - deltaLaminin;
 	}
 	
 	public Vector3f getColor3Vector(){
@@ -111,27 +139,15 @@ public class CMWall implements CMBioObj{
 		return visible;
 	}
 	
-	public void collided(CMBioObj c, ManifoldPoint pt, boolean isObjA, long collId){
-		Vector3f localPoint = new Vector3f();
-		Vector3f otherPoint = new Vector3f();
-		if (isObjA){
-			localPoint.set(pt.localPointA);
-			otherPoint.set(pt.localPointB);
-		}
-		else{
-			localPoint.set(pt.localPointB);
-			otherPoint.set(pt.localPointA);
-		}
+	public void collided(CMBioObj c, ManifoldPoint pt, long collId){
+		
 		if (c instanceof CMCell){
-			//System.out.println("Wall " + id + " is binding to " + c.getID());
 			if (sim.constraintExists(collId)){
 				sim.getConstraint(collId).checkIn();
-				//System.out.println("Wall " + id + " is checking in.");
 			}
 			else{
-				CMGenericConstraint con = new CMGenericConstraint(sim, body, c.getRigidBody(), localPoint, otherPoint, 1000, 20, collId);
-				con.checkIn();
-				//System.out.println("Wall " + id + " has made a constraint.");
+				//Let the cell handle the collision
+				c.collided(this, pt, collId);
 			}
 		}
 	}
@@ -153,14 +169,6 @@ public class CMWall implements CMBioObj{
 		return (0.0f);
 	}
 	
-	public void addConstraint(CMGenericConstraint c){
-		
-	}
-	
-	public void removeConstraint(CMGenericConstraint c){
-		
-	}
-	
 	public void destroy(){
 		body.destroy();
 	}
@@ -171,5 +179,17 @@ public class CMWall implements CMBioObj{
 	
 	public boolean isMarked(){
 		return toRemove;
+	}
+	
+	public boolean isBound(){
+		return bound;
+	}
+	
+	public void clearBound(){
+		bound = false;
+	}
+	
+	public void bind(){
+		bound = true;
 	}
 }

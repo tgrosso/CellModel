@@ -14,19 +14,202 @@
  */
 package cellModel;
 
+import java.io.File;
+import java.util.TimeZone;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.io.IOException;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
+import java.util.Date;
+
+import org.lwjgl.LWJGLException;
+
+import com.bulletphysics.demos.opengl.LWJGL;
+import com.bulletphysics.demos.opengl.GLDebugDrawer;
+
 /**
  * @author tagsit
  * The CMSimGenerator is the interface between the GUI and the CMSimulator
  * The user-entered parameters can be read from this class.
  */
 public class CMSimGenerator {
-	private CMAssay assayType = CMAssay.TRANSWELL;
+	public static File dataDir = null;
 	
-	public void generateAssay(CMSimulation sim){
+	public File baseFile = null;
+	public int numCells = 1;
+	public String pdepeDirectory = "";
+	public String timeZone = "GMT";
+	public int screenWidth = 900;
+	public int screenHeight = 600;
+	public float sinkConc = 0;
+	public float sourceConc = 0;
+	public float distFromSource = 0;
+	public long endTime = 60 * 1000; //length of run in milliseconds
+	public boolean generateImages = false;
+	public long seed = 0;
+	
+	public CMSimGenerator(File base, long sd){
+		seed = sd;
+		if (base != null){
+			baseFile = base;
+			baseFile.mkdir();
+		}
+	}
+	
+	public CMSimGenerator(File inputFile, File base, long sd){
+		seed = sd;
+		String name = inputFile.getName();
+		int ind = name.lastIndexOf('.');
+		if (ind>0){
+			name = name.substring(0, ind);
+		}
+		if (base != null && name.length() > 0){
+			baseFile = new File(base, name);
+			baseFile.mkdir(); 
+		}
+		try{
+			FileInputStream fis = new FileInputStream(inputFile);
+			InputStreamReader isr = new InputStreamReader(fis);
+			BufferedReader br = new BufferedReader(isr);
+			String line;
+			
+			while ((line = br.readLine()) != null) {
+				if (line.length() > 0 && !line.contains("\\\\")){
+					int index = line.indexOf('\t');
+					if (index < 0){
+						System.err.println("Badly formatted input. Variable<tab>value.");
+						System.err.println("Input was: " + line);
+						continue;
+					}
+					String value = line.substring(index);
+					value = value.substring(1);
+					String var = line.substring(0, index).trim();
+					setVar(var, value);
+				}
+			}
+
+		}
+		catch(IOException e){
+			System.err.println("Error reading startup file. ");
+			System.err.println(e.toString());
+		}
+	}
+	
+	public CMSimGenerator(File inputFile, File base){
+		this(inputFile, base, System.currentTimeMillis());
+	}
+	
+	private void setVar(String v, String val){
+		if (v.compareTo("pdepeDirectory") == 0){
+			pdepeDirectory = val;
+			System.out.println("pdepeDirectory set to " + val);
+		}
+		else if (v.compareTo("numCells") == 0){
+			try{
+				numCells = Integer.parseInt(val);
+				System.out.println("numCells set to " + numCells);
+			}
+			catch(NumberFormatException e){
+				System.err.println("numCells must be an integer. Found " + val + ". Using default");
+			}
+		}
+		else if (v.compareTo("screenWidth") == 0){
+			try{
+				screenWidth = Integer.parseInt(val);
+				System.out.println("screenWidth set to " + screenWidth);
+			}
+			catch(NumberFormatException e){
+				System.err.println("screenWidth must be an integer. Found " + val + ". Using default");
+			}
+		}
+		else if (v.compareTo("screenHeight") == 0){
+			try{
+				screenHeight = Integer.parseInt(val);
+				System.out.println("screenHeight set to " + screenHeight);
+			}
+			catch(NumberFormatException e){
+				System.err.println("screenHeight must be an integer. Found " + val + ". Using default");
+			}
+		}
+		else if (v.compareTo("sinkConc") == 0){
+			try{
+				sinkConc = Float.parseFloat(val);
+				System.out.println("sinkConc set to " + sinkConc);
+			}
+			catch(NumberFormatException e){
+				System.err.println("sinkConc must be a float. Found " + val + ". Using default");
+			}
+		}
+		else if (v.compareTo("sourceConc") == 0){
+			try{
+				sourceConc = Float.parseFloat(val);
+				System.out.println("sourceConc set to " + sourceConc);
+			}
+			catch(NumberFormatException e){
+				System.err.println("sourceConc must be a float. Found " + val + ". Using default");
+			}
+		}
+		else if (v.compareTo("distFromSource") == 0){
+			try{
+				distFromSource = Float.parseFloat(val);
+				System.out.println("distFromSource set to " + distFromSource);
+			}
+			catch(NumberFormatException e){
+				System.err.println("distFromSource must be a float. Found " + val + ". Using default");
+			}
+		}
+		else if (v.compareTo("captureImages") == 0){
+			generateImages = Boolean.parseBoolean(val);
+		}
+		else{
+			System.err.println("Variable " + v + " not known.");
+		}
 		
 	}
 	
-	public void setAssayType(CMAssay type){
-		this.assayType = type;
+	public static void main(String[] args){
+		long seed = System.currentTimeMillis();
+		Date now = new Date();
+		SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
+	    String dateString = df.format(now);
+	    dataDir = new File("CM-" + dateString);
+		dataDir.mkdir();
+		
+		if (args.length > 0){
+			for (int i = 0; i < args.length; i++){
+				System.out.println(args[i]);
+				File f = new File(args[i]);
+				CMSimGenerator csg = new CMSimGenerator(f, dataDir, seed);
+				
+				CMSimulation sim = new CMSimulation(LWJGL.getGL(), csg);
+				sim.initPhysics();
+				sim.getDynamicsWorld().setDebugDrawer(new GLDebugDrawer(LWJGL.getGL()));
+
+				try{
+					CMLWJGL.main(args, csg.screenWidth, csg.screenHeight, "Cell Simulation", sim);
+				}
+				catch(LWJGLException e){
+					System.err.println("Could not run simulation.  Error: " + e.toString());
+				}
+			}
+		}
+		else{
+			System.err.println("No input files - Using default values.");
+			CMSimGenerator csg = new CMSimGenerator(dataDir, seed);
+			
+			CMSimulation sim = new CMSimulation(LWJGL.getGL(), csg);
+			sim.initPhysics();
+			sim.getDynamicsWorld().setDebugDrawer(new GLDebugDrawer(LWJGL.getGL()));
+			
+			try{
+				CMLWJGL.main(args, csg.screenWidth, csg.screenHeight, "Cell Simulation", sim);
+			}
+			catch(LWJGLException e){
+				System.err.println("Could not run simulation.  Error: " + e.toString());
+			}
+		}
 	}
+	
 }

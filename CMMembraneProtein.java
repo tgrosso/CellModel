@@ -14,10 +14,58 @@
  */
 package cellModel;
 
+import com.bulletphysics.util.ObjectArrayList;
+import java.util.Vector;
+
 /**
  * @author tagsit
  *
  */
-public interface CMMembraneProtein {
-	public float[] getBaseColor();
+public class CMMembraneProtein {
+	protected CMSimulation sim;
+	protected float maximumDensity;
+	protected float baseDensity;
+	protected float[] baseColor;
+	protected String name;
+	
+	public CMMembraneProtein(CMSimulation s, float maxDen, float baseDen, float[] base, String n){
+		sim = s;
+		maximumDensity = maxDen;
+		baseDensity = baseDen;
+		baseColor = base;
+		name = n;
+	}
+	
+	protected float[] getBaseColor(){
+		return baseColor;
+	}
+	
+	protected String getName(){
+		return name;
+	}
+	
+	protected float getBaseDensity(){
+		return baseDensity;
+	}
+	
+	protected float getMaxDensity(){
+		return maximumDensity;
+	}
+	
+	protected float updateFreeReceptors(float ligandConcentration, float currentBound, float currentFree, float portion, float deltaTime){
+		return 0f;
+	}
+	
+	protected float updateBoundReceptors(float ligandConcentration, float currentBound, float currentFree, float deltaTime){
+		return 0f;
+	}
+	
+	public boolean bindsToLaminin(){
+		return false;
+	}
+	
+	public int bindReceptors(int numLigands, int numFreeReceptors){
+		return 0;
+	}
+	
 }

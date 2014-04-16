@@ -17,44 +17,44 @@
 
 package cellModel;
 
-import java.util.Date;
-import java.util.Random;
 import javax.vecmath.Vector3f;
-import com.bulletphysics.collision.shapes.CollisionShape;
-import com.bulletphysics.dynamics.RigidBody;
+
+import com.bulletphysics.BulletGlobals;
 import com.bulletphysics.dynamics.constraintsolver.Generic6DofConstraint;
-import com.bulletphysics.dynamics.constraintsolver.Point2PointConstraint;
 import com.bulletphysics.linearmath.Transform;
 
-
-public class CMGenericConstraint extends Point2PointConstraint{ // implements CMBioObj {
-//public class CMGenericConstraint extends Generic6DofConstraint{ // implements CMBioObj {
+public class CMGenericConstraint implements CMConstraint{ // implements CMBioObj {
 	private boolean isActive; //the constraint is active.. either a current constraint or a constraint that needs to be added to the world
 	private int checked; //checks in number of constraints (can keep track of number for destroy method)
 	private long initialTime; //need to find a way to subtract Date values
 	private long life; // amount of time the constraint will last
 	private long collisionID;
+	private float bonds, maxBonds;
+	private int segment = -1;
+	CMSegmentedCell cell = null;
 	CMSimulation sim;
+	Generic6DofConstraint constraint;
 	
-	
-	public CMGenericConstraint(CMSimulation s, CMRigidBody rbA, CMRigidBody rbB, Vector3f localA, Vector3f localB, long mu, long sd, long ID){
-	//public CMGenericConstraint(CMSimulation s, CMRigidBody rbA, CMRigidBody rbB, Transform localA, Transform localB, boolean useLinearReferenceFrameA, long mu, long sd, long ID){
-		super(rbA, rbB, localA, localB);
+	public CMGenericConstraint(CMSimulation s, CMRigidBody rbA, CMRigidBody rbB, Transform localA, Transform localB, boolean useLinearReferenceFrameA, long mu, long sd, long ID, int bds, int maxBds, int seg){
+		constraint= new Generic6DofConstraint(rbA, rbB, localA, localB, true);
 		sim = s;
 		isActive = false;
 		checked = 0;
 		collisionID = ID;
 		initialTime = sim.getCurrentTimeMicroseconds();
-		//using Gaussian (normal) distribution
-		//Random lifeGenerator = new Random();
-		//life = (long) ((mu) + (lifeGenerator.nextDouble()) * sd);
-		sim.addConstraint(this);
-
+		life = (long) ((mu) + (sim.nextGaussianF() * sd));
+		if (life < 0){
+			life = 0;
 		}
+		bonds = bds;
+		maxBonds = maxBds;
+		sim.addConstraint(this);
+		segment = seg;
+		if (rbA.getParent() instanceof CMSegmentedCell){
+			cell = (CMSegmentedCell)rbA.getParent();
+		}
+	}
 	
-	
-	//have to add collision detection to see if the two objects collided to perform this function
-	//have to check if collided with another cell... should collided function have two parameters? (CMBioObj c, CMBioObj d)**
 	public void checkIn(){
 		if (checked < 2){
 			checked++; //should we inform the objects here that they have been checked in for a constraint?
@@ -69,10 +69,24 @@ public class CMGenericConstraint extends Point2PointConstraint{ // implements CM
 	
 	//updating time to see if constraint continues or is broken in next time step
 	public void updateTime(){
-		long currentTime = sim.getCurrentTimeMicroseconds();
-		if (currentTime - initialTime > life){
+		if (bonds < 10){
 			isActive = false;
+			return;
 		}
+		float strength = (bonds/(float)maxBonds);
+		float maxBondLength = 1.5f;
+		float bondLength = (1.0f - strength)*maxBondLength;
+		float angularLimitX = strength * BulletGlobals.SIMD_PI;
+		float angularLimitYZ = strength * BulletGlobals.SIMD_HALF_PI;
+		constraint.setLinearLowerLimit(new Vector3f(0, 0, 0));
+		constraint.setLinearUpperLimit(new Vector3f(0f, bondLength, 0f));
+		constraint.setAngularLowerLimit(new Vector3f(-angularLimitX, -angularLimitYZ, -angularLimitYZ));
+		constraint.setAngularUpperLimit(new Vector3f(angularLimitX, angularLimitYZ, angularLimitYZ)); //can rotate around z axis
+		int brokenBonds = Math.round(bonds * .1f);
+		bonds = bonds - brokenBonds; //Have to make this based on probability
+		cell.breakBonds(brokenBonds, segment);
+		//System.out.println("Constraint " + collisionID + " Strength: " + strength);
+		
 	}
 	
 	//need better way to clean this up
@@ -93,24 +107,8 @@ public class CMGenericConstraint extends Point2PointConstraint{ // implements CM
 	public long getID(){
 		return (collisionID);
 	}
-
 	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-
-
+	public Generic6DofConstraint getConstraint(){
+		return constraint;
+	}
 }

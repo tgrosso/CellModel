@@ -25,14 +25,17 @@ package cellModel;
 //This is an extension of the JBullet LWJGL class
 
 import java.awt.event.KeyEvent;
+import java.nio.ByteBuffer;
 import org.lwjgl.LWJGLException;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.DisplayMode;
 import org.lwjgl.opengl.PixelFormat;
+import org.lwjgl.opengl.GL11;
 import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.demos.opengl.LwjglGL;
+import java.util.Date;
 
 /**
  *
@@ -70,9 +73,18 @@ public class CMLWJGL {
 		long lastTime = System.currentTimeMillis();
 		int frames = 0;
 		
-		while (!Display.isCloseRequested() && !quit) {
+		while (!Display.isCloseRequested() && !quit &&!demoApp.readyToQuit()) {
 			demoApp.moveAndDisplay();
 			Display.update();
+			
+			if (demoApp.timeToOutputImage()){
+				GL11.glReadBuffer(GL11.GL_FRONT);
+				int w = Display.getDisplayMode().getWidth();
+				int h= Display.getDisplayMode().getHeight();
+				ByteBuffer buf = demoApp.getImageBuffer(w, h);
+				GL11.glReadPixels(0, 0, width, height, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buf);
+				demoApp.outputImage();
+			}
 
 			int modifiers = 0;
 			if (Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) || Keyboard.isKeyDown(Keyboard.KEY_RSHIFT)) modifiers |= KeyEvent.SHIFT_DOWN_MASK;

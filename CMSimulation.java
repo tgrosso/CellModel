@@ -73,6 +73,7 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.File;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 /**
@@ -81,12 +82,19 @@ import java.nio.ByteBuffer;
  * @author jezek2
  */
 public class CMSimulation extends DemoApplication{
-
+	//Unchanging variables
+	
+	private int width = 900, height = 600;
 
 	// maximum number of objects (test tube walls and apparatus, molecules and cells)
 	private static final int NUM_MOLECULES = 1500;
-	private static final int NUM_CELLS = 20;
+	private static final int NUM_CELLS = 1;
 	private final CMAssay assayType = CMAssay.MICROFLUIDIC;
+	private static SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
+	private static SimpleDateFormat summaryFormat = new SimpleDateFormat("HH:mm:ss:SSS");
+	
+	
+	private int viewingProtein = -1;
 	
 	private static CMTranswellChamber chamber;
 	private static CMMicrofluidicChannel channel;
@@ -98,65 +106,98 @@ public class CMSimulation extends DemoApplication{
 	
 	private ObjectArrayList<CMBioObj> modelObjects = new ObjectArrayList<CMBioObj>();
 	private ObjectArrayList<CMBioObjGroup> objectGroups = new ObjectArrayList<CMBioObjGroup>();
-	private ObjectArrayList<CMGenericConstraint> constraints = new ObjectArrayList<CMGenericConstraint>();
-	private CMBioObjGroup channelMols;
+	private ObjectArrayList<CMConstraint> constraints = new ObjectArrayList<CMConstraint>();
+	private ObjectArrayList<CMMembraneProtein> proteins = new ObjectArrayList<CMMembraneProtein>();
+	private boolean proteinsAdded = false;
 	private BroadphaseInterface broadphase;
 	private CollisionDispatcher dispatcher;
 	private ConstraintSolver solver;
 	private DefaultCollisionConfiguration collisionConfiguration;
 	private Random random;
 	private long collisionID = 0L;
-	private double summaryDelay = 1000; //Minimum number of milliseconds between summary reports
-	private long startTime, currentTime, lastWriteTime;
-	private long imageDelay, lastImageTime;
-	private File dataDir = null;
-	private BufferedWriter summaryFile = null, positionFile = null, concentrationFile = null;
-	SimpleDateFormat summaryFormat = new SimpleDateFormat("HH:mm:ss:SSS");
+	private double summaryDelay = 1000; //Minimum number of microseconds between summary reports
+	private long startTime, currentTime, lastWriteTime; //Units microseconds
+	private long imageDelay = 1000000/30; //microseconds beteen images => 30 frames per second
+	private long lastImageTime; // last time an images was generated in microseconds
+	private File dataDir = null, solverDir = null, templateDir = null;
+	private BufferedWriter groupData = null, cellData = null, concentrationData = null, membraneData = null, pdeData = null;
 	
-	private float baseCameraDistance = 100;
+	private CMConcentrationSolver concentrationSolver;
+	private long timeBetweenFrames = 1000000; //microseconds per frame
+	private long lastImageWritten; //Units microseconds
+	private CMImageGenerator imageGenerator;
 	
-	public CMSimulation(IGL gl, long seed){
+	private float baseCameraDistance = 20;
+	private boolean finished = false;
+	
+	private CMSimGenerator generator = null;
+	
+	public CMSimulation(IGL gl, CMSimGenerator gen){
 		super(gl);
-		random = new Random(seed);
+		generator = gen;
+		random = new Random(generator.seed);
 		buf = new StringBuilder();
-
-		SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
-	    Date now = new Date();
-	    String dateString = df.format(now);
 		
-		try {
-				dataDir = new File("CM-" + dateString);
-				dataDir.mkdir();
-				if (dataDir != null){
-					summaryFile = new BufferedWriter(new FileWriter("CM-" + dateString + "/summary.csv"));
-					summaryFile.write("Time Since Sim Start\tGroup Name\tCenter of Mass\tNumber Below Mesh");
-					summaryFile.newLine();
-					positionFile = new BufferedWriter(new FileWriter("CM-" + dateString + "/positions.csv"));
-					positionFile.write("Time Since Sim Start\tType\tID\tCOM\tLinear Velocity");
-					positionFile.newLine();
-					concentrationFile = new BufferedWriter(new FileWriter("CM-" + dateString + "/concentrations.csv"));
-					concentrationFile.write("Time Since Sim Start\t");
-					concentrationFile.newLine();
+		//Set intial times
+		startTime = clock.getTimeMicroseconds(); //clock is inherited from DemoApplication
+		lastWriteTime = startTime;
+		lastImageWritten = startTime;
+		lastImageTime = startTime; //last time an image was captured
+		summaryFormat.setTimeZone(TimeZone.getTimeZone(generator.timeZone)); //To get the right time formats, need Grenwhich Mean Time
+
+		//Create output files
+		
+		try {	
+				if (generator.baseFile != null){
+					String baseName = generator.baseFile + File.separator;
+					groupData = new BufferedWriter(new FileWriter(baseName + "groupData.csv"));
+					groupData.write("Time Since Sim Start\tGroup Name\tCenter of Mass\tNumber Below Mesh");
+					groupData.newLine();
+					cellData = new BufferedWriter(new FileWriter(baseName + "cellData.csv"));
+					cellData.write("Time Since Sim Start\tType\tID\tCOM x\tCOM y\tCOM z\tLinVelocity x\tLinVelocity y\tLinVelocity z");
+					cellData.newLine();
+					concentrationData = new BufferedWriter(new FileWriter(baseName + "ligandData.csv"));
+					concentrationData.write("Time Since Sim Start\t");
+					membraneData = new BufferedWriter(new FileWriter(baseName + "membraneProData.csv"));
+					membraneData.write("Time Since Sim Start\tProtein\tCellID\tSegmentID\tBoundDensity\tUnboundDensity");
+					membraneData.newLine();
+				}
+				else {
+					System.err.println("No base file given!");
+					System.err.println("Cannot generate output files!");
 				}
 	            
 		} catch (IOException e) {
-	        	System.out.println("Cannot generate output files!");
-	        	System.out.println("IOException: " + e.toString());
+	        	System.err.println("Cannot generate output files!");
+	        	System.err.println("IOException: " + e.toString());
 		}
 		
-		startTime = clock.getTimeMicroseconds(); //clock is inherited from DemoApplication
-		lastWriteTime = startTime;
-		imageDelay = 1000000/30; //number of microseconds between image captures 
-		lastImageTime = startTime; //last time an image was captured
-		summaryFormat.setTimeZone(TimeZone.getTimeZone("GMT")); //To get the right time formats, need Grenwhich Mean Time
-	}
-	
-	public CMSimulation(IGL gl) {
-		this(gl, System.currentTimeMillis());
+		
+		//Generate solutions to microfluidic if sink < source
+		//TODO check for the solver in the pdepe directory
+		if (generator.sinkConc < generator.sourceConc){
+			try{
+				concentrationSolver = new CMConcentrationSolver(generator.baseFile.getName(), generator.pdepeDirectory, 1, 13000, 360000, generator.sourceConc, generator.sinkConc);
+				//TODO What exception is thrown if he pdepe directory doesn't work?
+				//Can we check to see if one already exists?
+			
+			} catch (IOException e){
+				System.err.println("Cannot generate concentration gradient. Using linear gradient.");
+			}
+		}
+		else if (generator.sinkConc > generator.sourceConc){
+			System.out.println("Cannot have source Concentration less than sink Concentration! Exitng.");
+			finished = true;
+		}
+		
+		if (generator.generateImages){
+			File imageFile = new File(dataDir, "images");
+			imageFile.mkdirs();
+			imageGenerator = new CMImageGenerator(imageFile, width, height, 4);
+		}
 	}
 	
 	public void initPhysics() {
-		//setCameraDistance(50f);
 
 		// collision configuration contains default setup for memory, collision setup
 		collisionConfiguration = new DefaultCollisionConfiguration();
@@ -172,49 +213,40 @@ public class CMSimulation extends DemoApplication{
 		
 		dynamicsWorld = new DiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfiguration);
 
-		//Simulation takes place in fluid.  For now, no gravity
-		dynamicsWorld.setGravity(new Vector3f(0f, 0.0f, 0f));
+		//Simulation takes place in fluid.  Gravity is set for individual cells
+		dynamicsWorld.setGravity(new Vector3f(0f, 0f, 0f));
 		
-		if (assayType == CMAssay.TRANSWELL){
-			chamber = new CMTranswellChamber(this);
-			chamber.makeChamber();
-			//objectGroups.add(CMCell.fillSpace(this, NUM_CELLS, chamber.getMinAboveMeshVector(), chamber.getMaxAboveMeshVector(), "RPCs"));
-			//objectGroups.add(CMMolecule.fillSpace(this, NUM_MOLECULES, chamber.getMinBelowMeshVector(), chamber.getMaxBelowMeshVector(), "Netrin"));
+		//TODO - how do we put this into the generator?
+		float[] proColor0 = new float[3];
+		float[] proColor1 = new float[3];
+		proColor0[0] = 1f; proColor0[1] = 0f; proColor0[2]=0f;
+		//proColor1[0] = 1f; proColor1[1] = 1f; proColor1[2]=0f;
+		proteins.add(new CMEGFR(this, proColor0));
+		//proteins.add(new CMIntegrin(this, proColor1));
+		viewingProtein = 0;
+		
+		if(assayType == CMAssay.MICROFLUIDIC){
+			float source_nM = generator.sourceConc;
+			float sink_nM = generator.sinkConc;
+			float distFromSource = generator.distFromSource;
+			channel = new CMMicrofluidicChannel(this, source_nM, sink_nM, distFromSource);
+			channel.writeConcentrationData(concentrationData, currentTime, true);
 			
+			CMBioObjGroup microCells = new CMBioObjGroup(this, "RPCs");
+			CMSegmentedCell cell0 = new CMSegmentedCell(this, 10f, new Vector3f(-50f, -10f, 0f), 1, true); 
+			addBioObject(cell0);
+			microCells.addObject(cell0);
+			cell0.setCellGravity();
 			
-			CMSegmentedCell cell1 = new CMSegmentedCell(this, 5f, new Vector3f(5f, 20f, 0f), 1); 
-			addBioObject(cell1);
-			cell1.setCellGravity();
-			
-			
-			CMSegmentedCell cell2 = new CMSegmentedCell(this, 5f, new Vector3f(6f, 31f, 0f), 1); 
-			addBioObject(cell2);
-			cell2.setCellGravity();
-			
-			CMSegmentedCell cell3 = new CMSegmentedCell(this, 5f, new Vector3f(6f, 10f, 0f), 1); 
-			addBioObject(cell3);
-			cell3.setCellGravity();
-			/*
-			CMSegmentedCell cell4 = new CMSegmentedCell(this, 5f, new Vector3f(15f, 10f, 0f), 3); 
-			addBioObject(cell4);
-			cell4.setCellGravity();
-			
-			CMSegmentedCell cell5 = new CMSegmentedCell(this, 5f, new Vector3f(-5f, 35f, -10f), 4); 
-			addBioObject(cell5);
-			cell5.setCellGravity();
-			*/
+			objectGroups.add(microCells);
 		}
 		
-		else if(assayType == CMAssay.MICROFLUIDIC){
-			int numSourceMols = 1000;
-			int numSinkMols = 0;
-			channel = new CMMicrofluidicChannel(this, numSourceMols, numSinkMols);
-			objectGroups.add(CMCell.fillSpace(this, NUM_CELLS, channel.getMinChannelVector(), channel.getMaxChannelVector(), "RPCs"));
-		}
 		
 		if (needGImpact){
 			GImpactCollisionAlgorithm.registerAlgorithm(dispatcher);
 		}
+		
+		
 		clientResetScene();
 	}
 	
@@ -222,31 +254,26 @@ public class CMSimulation extends DemoApplication{
 	public void clientMoveAndDisplay() {
 		if (lastWriteTime == startTime){
 			outputSummary();
-			outputPositions();
+			outputCellData();
 		}
 		
 		int numObjects = modelObjects.size();
 		for (int i = 0; i < numObjects; i++){
 			CMBioObj bioObj = modelObjects.getQuick(i);
 			bioObj.updateObject();
-			RigidBody rb = bioObj.getRigidBody();
-			aabbMin.set(0, 0, 0);
-			aabbMax.set(0, 0, 0);
-			rb.getAabb(aabbMin, aabbMax);
-			/*
-			assert aabbMin.x >= -testTubeSize.x/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object to left of Test Tube";
-			assert aabbMin.y >= -testTubeSize.y/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object  below Test Tube";
-			assert aabbMin.z >= -testTubeSize.z/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object in front of Test Tube";
-			assert aabbMax.x <= testTubeSize.x/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object to right of Test Tube";
-			assert aabbMin.y <= testTubeSize.y/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object above Test Tube";
-			assert aabbMin.z <= testTubeSize.z/2 : bioObj.getType() + "-"+ bioObj.getID() + "Object behind Test Tube";
-			*/
 		}
 
 		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		// simple dynamics world doesn't handle fixed-time-stepping
 		float deltaTime = clock.getTimeMicroseconds() - currentTime;
 		currentTime = clock.getTimeMicroseconds();
+		if (currentTime/1000 > generator.endTime){
+			finished = true;
+		}
+		
+		if (currentTime > 2000 && assayType == CMAssay.MICROFLUIDIC){
+			channel.addLigand();
+		}
 
 		// step the simulation
 		if (dynamicsWorld != null) {
@@ -258,18 +285,18 @@ public class CMSimulation extends DemoApplication{
 			
 			int numManifolds = dynamicsWorld.getDispatcher().getNumManifolds();
 			for (int i=0;i<numManifolds;i++){
+				//System.out.println(collisionID);
 				PersistentManifold contactManifold =  dynamicsWorld.getDispatcher().getManifoldByIndexInternal(i);
 				CMRigidBody objA = (CMRigidBody)contactManifold.getBody0();
 				CMRigidBody objB = (CMRigidBody)contactManifold.getBody1();
-				//System.out.println("A " + objA + " B: " + objB);
-			
 				int numContacts = contactManifold.getNumContacts();
 				for (int j=0; j<numContacts; j++){
 					ManifoldPoint pt = contactManifold.getContactPoint(j);
-					if (pt.getDistance()<0f){
-						objA.getParent().collided(objB.getParent(), pt, true, collisionID);
-						objB.getParent().collided(objA.getParent(), pt, false,  collisionID);
+					if (pt.getDistance()<.05f){ //to accont for length of laminin and integrin
+						objA.getParent().collided(objB.getParent(), pt, collisionID);
+						objB.getParent().collided(objA.getParent(), pt, collisionID);
 						collisionID++;
+						
 						if (collisionID >= Long.MAX_VALUE){
 							collisionID = 0L;
 						}
@@ -285,22 +312,31 @@ public class CMSimulation extends DemoApplication{
 			CMBioObjGroup group = objectGroups.getQuick(i);
 			group.cleanGroup();
 		}
-		System.out.println("Number of constraints: " + constraints.size());
+
 		int index = 0;
+		if (constraints.size() > 0){
+			//System.out.println("Num constraints: " + constraints.size());
+		}
 		while(index < constraints.size()){
-			CMGenericConstraint con = constraints.getQuick(index);
+			CMConstraint con = constraints.getQuick(index);
 			con.updateTime();
 			if (!con.isActive()){
 				constraints.remove(index);
 			}
 			else{
 				index++;
+				CMRigidBody objA = (CMRigidBody)con.getConstraint().getRigidBodyA();
+				objA.getParent().bind();
+				CMRigidBody objB = (CMRigidBody)con.getConstraint().getRigidBodyB();
+				objB.getParent().bind();
 			}
 		}
+
 		renderme();
 		if ((currentTime - lastWriteTime)/1000.0 > summaryDelay){
 			outputSummary();
-			outputPositions();
+			outputCellData();
+			outputMembraneData();
 			lastWriteTime = currentTime;
 		}
 	}
@@ -319,20 +355,20 @@ public class CMSimulation extends DemoApplication{
 
 	
 	
-	public void addConstraint(CMGenericConstraint c){
-		dynamicsWorld.addConstraint(c);
+	public void addConstraint(CMConstraint c){
+		dynamicsWorld.addConstraint(c.getConstraint());
 		constraints.add(c);
 	}
 	
-	public void removeConstraint(CMGenericConstraint c){
-		dynamicsWorld.removeConstraint(c);
+	public void removeConstraint(CMConstraint c){
+		dynamicsWorld.removeConstraint(c.getConstraint());
 		constraints.remove(c);
 	}
 	
 	public boolean constraintExists(long id){
 		int numConstraints = constraints.size();
 		for (int i = 0; i < numConstraints; i++){
-			CMGenericConstraint constraint = constraints.getQuick(i);
+			CMConstraint constraint = constraints.getQuick(i);
 			if (constraint.getID() == id){
 				return (true);
 			}
@@ -340,10 +376,10 @@ public class CMSimulation extends DemoApplication{
 		return (false);
 	}
 	
-	public CMGenericConstraint getConstraint(long id){
+	public CMConstraint getConstraint(long id){
 		int numConstraints = constraints.size();
 		for (int i = 0; i < numConstraints; i++){
-			CMGenericConstraint constraint = constraints.getQuick(i);
+			CMConstraint constraint = constraints.getQuick(i);
 			if (constraint.getID() == id){
 				return constraint;
 			}
@@ -354,7 +390,7 @@ public class CMSimulation extends DemoApplication{
 	public void myinit(){
 		super.myinit();
 		setCameraDistance(baseCameraDistance);
-		ele = 5f;
+		ele = 0f;
 		updateCamera();
 	}
 	
@@ -383,84 +419,15 @@ public class CMSimulation extends DemoApplication{
 			float yIncr = 20f;
 
 			gl.glDisable(GL_LIGHTING);
-			gl.glColor3f(1f, 1f, 1f);
-
-			if ((debugMode & DebugDrawModes.NO_HELP_TEXT) == 0) {
-				setOrthographicProjection();
-
-				yStart = showProfileInfo(xOffset, yStart, yIncr);
-
-				String s = "mouse to interact";
-				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				yStart += yIncr;
-
-				// JAVA NOTE: added
-				s = "LMB=drag"; // RMB=shoot box, MIDDLE=apply impulse";
-				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				yStart += yIncr;
-				
-				s = "space to reset";
-				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				yStart += yIncr;
-
-				s = "cursor keys and z,x to navigate";
-				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				yStart += yIncr;
-
-				s = "i to toggle simulation, s single step";
-				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				yStart += yIncr;
-
-				s = "q to quit";
-				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				yStart += yIncr;
-
-				s = "h to toggle help text";
-				drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				yStart += yIncr;
-				yStart += yIncr;
-				
-
-				//buf.setLength(0);
-				//buf.append("+- shooting speed = ");
-				//FastFormat.append(buf, ShootBoxInitialSpeed);
-				//drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				//yStart += yIncr;
-
-				if (getDynamicsWorld() != null) {
-					buf.setLength(0);
-					buf.append("# objects = ");
-					FastFormat.append(buf, getDynamicsWorld().getNumCollisionObjects());
-					drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-					yStart += yIncr;
-					
-					buf.setLength(0);
-					buf.append("# pairs = ");
-					FastFormat.append(buf, getDynamicsWorld().getBroadphase().getOverlappingPairCache().getNumOverlappingPairs());
-					drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-					yStart += yIncr;
-
-				}
-
-				// JAVA NOTE: added
-				int free = (int)Runtime.getRuntime().freeMemory();
-				int total = (int)Runtime.getRuntime().totalMemory();
-				buf.setLength(0);
-				buf.append("heap = ");
-				FastFormat.append(buf, (float)(total - free) / (1024*1024));
-				buf.append(" / ");
-				FastFormat.append(buf, (float)(total) / (1024*1024));
-				buf.append(" MB");
-				drawString(buf, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
-				yStart += yIncr;
-				
-				resetPerspectiveProjection();
-			}
+			gl.glColor3f(0f, 0f, 0f);
+			
+			setOrthographicProjection();
+			String s = "Z to zoom in";
+			drawString(s, Math.round(xOffset), Math.round(yStart), TEXT_COLOR);
+			resetPerspectiveProjection();
 
 			gl.glEnable(GL_LIGHTING);
 		}
-		
-		//updateCamera();
 	}
 	
 	
@@ -491,8 +458,29 @@ public class CMSimulation extends DemoApplication{
 		needGImpact = b;
 	}
 	
+	public int getNumProteins(){
+		return proteins.size();
+	}
+	
+	public CMMembraneProtein getProtein(int index){
+		return proteins.getQuick(index);
+	}
+	
+	public int getViewingProtein(){
+		return viewingProtein;
+	}
+	
+	public float getLigandConcentration(float x_value, long time){
+		//time is in milliseconds
+		if (assayType == CMAssay.MICROFLUIDIC){
+			float dfm = channel.getDistanceFromMinimum(x_value);
+			return (channel.getConcentration(dfm, time));
+		}
+		return 0f;
+	}
+	
 	public void outputSummary(){
-		long nowTimeMS = clock.getTimeMilliseconds()- (startTime/1000);
+		long nowTimeMS = (currentTime - startTime)/1000;
 		Date nowTime = new Date(nowTimeMS);
 		String nowString = summaryFormat.format(nowTime);
 		
@@ -506,8 +494,8 @@ public class CMSimulation extends DemoApplication{
 		
 				int numBelowMesh = group.getNumObjectsInside("RPCs", chamber.getMinBelowMeshVector(), chamber.getMaxBelowMeshVector());
 				try{
-					summaryFile.write(nowString + "\t" + groupName + "\t" + groupCOM.toString() + "\t" + numBelowMesh);
-					summaryFile.newLine();
+					groupData.write(nowString + "\t" + groupName + "\t" + groupCOM.toString() + "\t" + numBelowMesh);
+					groupData.newLine();
 				}
 				catch(IOException e){
 					System.out.println("Error writing data to summary file.");
@@ -518,10 +506,10 @@ public class CMSimulation extends DemoApplication{
 		
 		if (assayType == CMAssay.MICROFLUIDIC){
 			try{
-				concentrationFile.write(nowString + "\t");
-				channel.writeConcentrationData(concentrationFile, currentTime);
-				concentrationFile.newLine();
-				concentrationFile.flush();
+				concentrationData.write(nowString + "\t");
+				channel.writeConcentrationData(concentrationData, currentTime/1000, false);
+				concentrationData.newLine();
+				concentrationData.flush();
 			}
 			catch(IOException e){
 				System.out.println("Error writing data to concentration file.");
@@ -530,7 +518,7 @@ public class CMSimulation extends DemoApplication{
 		}
 	}
 	
-	public void outputPositions(){
+	public void outputCellData(){
 		long nowTimeMS = clock.getTimeMilliseconds()- (startTime/1000);
 		Date nowTime = new Date(nowTimeMS);
 		String nowString = summaryFormat.format(nowTime);
@@ -549,13 +537,46 @@ public class CMSimulation extends DemoApplication{
 			rb.getLinearVelocity(vel);
 			rb.getCenterOfMassPosition(com);
 			try{
-				positionFile.write(nowString + "\t" + bioObj.getType() + "\t" + bioObj.getID() + "\t" + com + "\t" + vel);
-				positionFile.newLine();
+				cellData.write(nowString + "\t" + bioObj.getType() + "\t" + bioObj.getID() + "\t" + com.x + "\t" + com.y + "\t" + com.z + "\t" + vel.x + "\t" + vel.y + "\t" + vel.z);
+				cellData.newLine();
 			}
 			catch(IOException e){
 				System.out.println("Cannot write to position file");
 				System.out.println(e.toString());
 			}
+		}
+	}
+	
+	public void outputMembraneData(){
+		int numPro = proteins.size();
+		if (numPro <= 0){
+			return;
+		}
+		long nowTimeMS = clock.getTimeMilliseconds()- (startTime/1000);
+		Date nowTime = new Date(nowTimeMS);
+		String nowString = summaryFormat.format(nowTime);
+		for (int i = 0 ;i < numPro; i++){
+			int numObjects = modelObjects.size();
+			for (int j = 0; j < numObjects; j++){
+				CMBioObj obj = modelObjects.getQuick(j);
+				if (obj.getType() == "Segmented Cell"){
+					CMSegmentedCell cell = (CMSegmentedCell)obj;
+					int numSeg = cell.getNumSegments();
+					int cellID = cell.getID();
+					for (int k = 0; k < numSeg; k++){
+						try{
+							//membraneData.write("Time Since Sim Start\tProtein\tCellID\tSegmentID\tBoundDensity\tUnboundDensity");
+							membraneData.write(nowString + "\t" + proteins.getQuick(i).getName() + "\t" + cellID + "\t" + k + "\t" + cell.getDensity(k, i, false) + "\t" + cell.getDensity(k, i, true));
+							membraneData.newLine();
+						}
+						catch(IOException e){
+							System.out.println("Cannot write to membrane data file");
+							System.out.println(e.toString());
+						}
+					}
+				}
+			}
+			
 		}
 	}
 	
@@ -568,40 +589,63 @@ public class CMSimulation extends DemoApplication{
 	}
 	
 	public boolean timeToTakeScreenshot(){
-		if (currentTime - lastWriteTime > imageDelay){
-			lastWriteTime = currentTime;
-			return true;
+		if (generator.generateImages){
+			if (currentTime - lastWriteTime > imageDelay){
+				lastWriteTime = currentTime;
+				return true;
+			}
+			else{
+				return false;
+			}
 		}
 		else{
 			return false;
 		}
 	}
 	
-	public void outputImage(ByteBuffer b){
-		
+	public boolean timeToOutputImage(){
+		if (generator.generateImages){
+			return (lastImageTime == startTime || (currentTime - lastImageTime > timeBetweenFrames));
+		}
+		return false;
+	}
+	
+	public ByteBuffer getImageBuffer(int w, int h){
+		return imageGenerator.getBuffer(w, h);
+	}
+	
+	public void outputImage(){
+		imageGenerator.makeImage();
+		lastImageTime = currentTime;
+	}
+	
+	public boolean readyToQuit(){
+		return finished;
 	}
 	
 	public void wrapUp(){
 		try{
-			summaryFile.flush();
-			summaryFile.close();
-			positionFile.flush();
-			positionFile.close();
-			concentrationFile.flush();
-			concentrationFile.close();
+			groupData.flush();
+			groupData.close();
+			cellData.flush();
+			cellData.close();
+			concentrationData.flush();
+			concentrationData.close();
+			membraneData.flush();
+			membraneData.close();
 		}
 		catch(IOException e){
 			System.out.println("Unable to close output files");
 			System.out.println(e.toString());
 		}
 	}
-	
+	/*
 	public static void main(String[] args) throws LWJGLException {
 		CMSimulation sim = new CMSimulation(LWJGL.getGL());
 		sim.initPhysics();
 		sim.getDynamicsWorld().setDebugDrawer(new GLDebugDrawer(LWJGL.getGL()));
 
-		CMLWJGL.main(args, 800, 600, "Cell Simulation", sim);
-	}
+		CMLWJGL.main(args, sim.width, sim.height, "Cell Simulation", sim);
+	}*/
 	
 }

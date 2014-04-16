@@ -54,6 +54,7 @@ public class CMBioObjGroup {
 		int index = 0;
 		while (index < objList.size()){
 			CMBioObj obj = objList.getQuick(index);
+			obj.clearBound();
 			if (obj.isMarked()){
 				if (removeObject(obj)){
 					continue; //Don't change index if object is removed
