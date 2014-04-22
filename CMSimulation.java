@@ -115,15 +115,16 @@ public class CMSimulation extends DemoApplication{
 	private DefaultCollisionConfiguration collisionConfiguration;
 	private Random random;
 	private long collisionID = 0L;
-	private double summaryDelay = 1000; //Minimum number of microseconds between summary reports
+	private double summaryDelay = 50000; //Minimum number of microseconds between summary reports
 	private long startTime, currentTime, lastWriteTime; //Units microseconds
+	private boolean firstOutputWritten = false; 
 	private long imageDelay = 1000000/30; //microseconds beteen images => 30 frames per second
 	private long lastImageTime; // last time an images was generated in microseconds
 	private File dataDir = null, solverDir = null, templateDir = null;
 	private BufferedWriter groupData = null, cellData = null, concentrationData = null, membraneData = null, pdeData = null;
 	
 	private CMConcentrationSolver concentrationSolver;
-	private long timeBetweenFrames = 1000000; //microseconds per frame
+	private long timeBetweenFrames = 60*1000000; //microseconds per frame
 	private long lastImageWritten; //Units microseconds
 	private CMImageGenerator imageGenerator;
 	
@@ -134,15 +135,12 @@ public class CMSimulation extends DemoApplication{
 	
 	public CMSimulation(IGL gl, CMSimGenerator gen){
 		super(gl);
+		
 		generator = gen;
 		random = new Random(generator.seed);
 		buf = new StringBuilder();
-		
-		//Set intial times
-		startTime = clock.getTimeMicroseconds(); //clock is inherited from DemoApplication
-		lastWriteTime = startTime;
-		lastImageWritten = startTime;
-		lastImageTime = startTime; //last time an image was captured
+
+		summaryDelay = (long)(generator.secBetweenOutput * 1000000);
 		summaryFormat.setTimeZone(TimeZone.getTimeZone(generator.timeZone)); //To get the right time formats, need Grenwhich Mean Time
 
 		//Create output files
@@ -157,10 +155,15 @@ public class CMSimulation extends DemoApplication{
 					cellData.write("Time Since Sim Start\tType\tID\tCOM x\tCOM y\tCOM z\tLinVelocity x\tLinVelocity y\tLinVelocity z");
 					cellData.newLine();
 					concentrationData = new BufferedWriter(new FileWriter(baseName + "ligandData.csv"));
-					concentrationData.write("Time Since Sim Start\t");
+					concentrationData.write("Time Since Sim Start\tExperimental Time\t");
 					membraneData = new BufferedWriter(new FileWriter(baseName + "membraneProData.csv"));
-					membraneData.write("Time Since Sim Start\tProtein\tCellID\tSegmentID\tBoundDensity\tUnboundDensity");
+					membraneData.write("Time Since Sim Start\tProtein\tCellID\tSegmentID\tBoundReceptors\tUnboundReceptors");
 					membraneData.newLine();
+					if (generator.generateImages){
+						File imageFile = new File(generator.baseFile, "image");
+						imageFile.mkdirs();
+						imageGenerator = new CMImageGenerator(imageFile, width, height, 4);
+					}
 				}
 				else {
 					System.err.println("No base file given!");
@@ -173,28 +176,24 @@ public class CMSimulation extends DemoApplication{
 		}
 		
 		
-		//Generate solutions to microfluidic if sink < source
+		//Generate solutions to microfluidic channel if sink < source
 		//TODO check for the solver in the pdepe directory
-		if (generator.sinkConc < generator.sourceConc){
-			try{
-				concentrationSolver = new CMConcentrationSolver(generator.baseFile.getName(), generator.pdepeDirectory, 1, 13000, 360000, generator.sourceConc, generator.sinkConc);
-				//TODO What exception is thrown if he pdepe directory doesn't work?
-				//Can we check to see if one already exists?
-			
-			} catch (IOException e){
-				System.err.println("Cannot generate concentration gradient. Using linear gradient.");
-			}
+		if (generator.sinkConc <= generator.sourceConc){
+			concentrationSolver = new CMConcentrationSolver(generator.baseFile.toString(), generator.pdepeDirectory, 1, 13000, 90000, generator.timeToSteadyState, generator.sourceConc, generator.sinkConc);
+			//TODO What exception is thrown if the pdepe directory doesn't work?
+			//Can we check to see if one already exists?
 		}
 		else if (generator.sinkConc > generator.sourceConc){
 			System.out.println("Cannot have source Concentration less than sink Concentration! Exitng.");
 			finished = true;
 		}
 		
-		if (generator.generateImages){
-			File imageFile = new File(dataDir, "images");
-			imageFile.mkdirs();
-			imageGenerator = new CMImageGenerator(imageFile, width, height, 4);
-		}
+		//Set initial times
+		startTime = clock.getTimeMicroseconds(); //clock is inherited from DemoApplication
+		currentTime = 0;
+		lastWriteTime = 0;
+		lastImageWritten = 0;
+		lastImageTime = 0; //last time an image was captured
 	}
 	
 	public void initPhysics() {
@@ -226,17 +225,15 @@ public class CMSimulation extends DemoApplication{
 		viewingProtein = 0;
 		
 		if(assayType == CMAssay.MICROFLUIDIC){
-			float source_nM = generator.sourceConc;
-			float sink_nM = generator.sinkConc;
 			float distFromSource = generator.distFromSource;
-			channel = new CMMicrofluidicChannel(this, source_nM, sink_nM, distFromSource);
+			channel = new CMMicrofluidicChannel(this, distFromSource, concentrationSolver);
 			channel.writeConcentrationData(concentrationData, currentTime, true);
 			
 			CMBioObjGroup microCells = new CMBioObjGroup(this, "RPCs");
-			CMSegmentedCell cell0 = new CMSegmentedCell(this, 10f, new Vector3f(-50f, -10f, 0f), 1, true); 
-			addBioObject(cell0);
-			microCells.addObject(cell0);
-			cell0.setCellGravity();
+			//CMSegmentedCell cell0 = new CMSegmentedCell(this, 10f, new Vector3f(-50f, -10f, 0f), 1, true); 
+			//addBioObject(cell0);
+			//microCells.addObject(cell0);
+			//cell0.setCellGravity();
 			
 			objectGroups.add(microCells);
 		}
@@ -245,16 +242,19 @@ public class CMSimulation extends DemoApplication{
 		if (needGImpact){
 			GImpactCollisionAlgorithm.registerAlgorithm(dispatcher);
 		}
-		
-		
 		clientResetScene();
 	}
 	
 	@Override
 	public void clientMoveAndDisplay() {
-		if (lastWriteTime == startTime){
+		if (!firstOutputWritten){
+			//System.out.println("Writing first time. Current time " + currentTime);
 			outputSummary();
 			outputCellData();
+			outputMembraneData();
+			firstOutputWritten = true;
+			currentTime = startTime;
+			//System.out.println("First data written. Current time " + currentTime);
 		}
 		
 		int numObjects = modelObjects.size();
@@ -265,15 +265,17 @@ public class CMSimulation extends DemoApplication{
 
 		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		// simple dynamics world doesn't handle fixed-time-stepping
-		float deltaTime = clock.getTimeMicroseconds() - currentTime;
-		currentTime = clock.getTimeMicroseconds();
-		if (currentTime/1000 > generator.endTime){
+		long newTime = clock.getTimeMicroseconds();
+		float deltaTime = newTime - currentTime;
+		currentTime = newTime - startTime;
+		if (currentTime/1000/1000 > generator.endTime){
+			System.out.println("Time is up. " + currentTime);
 			finished = true;
 		}
 		
-		if (currentTime > 2000 && assayType == CMAssay.MICROFLUIDIC){
-			channel.addLigand();
-		}
+		//if (currentTime > 2000 && assayType == CMAssay.MICROFLUIDIC){
+		//	channel.addLigand();
+		//}
 
 		// step the simulation
 		if (dynamicsWorld != null) {
@@ -333,7 +335,7 @@ public class CMSimulation extends DemoApplication{
 		}
 
 		renderme();
-		if ((currentTime - lastWriteTime)/1000.0 > summaryDelay){
+		if ((currentTime - lastWriteTime) > summaryDelay){
 			outputSummary();
 			outputCellData();
 			outputMembraneData();
@@ -480,9 +482,11 @@ public class CMSimulation extends DemoApplication{
 	}
 	
 	public void outputSummary(){
-		long nowTimeMS = (currentTime - startTime)/1000;
+		//System.out.println("Output Suumary");
+		long nowTimeMS = (currentTime)/1000;
 		Date nowTime = new Date(nowTimeMS);
 		String nowString = summaryFormat.format(nowTime);
+		
 		
 		int numGroups = objectGroups.size();
 		
@@ -504,9 +508,10 @@ public class CMSimulation extends DemoApplication{
 			}
 		}
 		
-		if (assayType == CMAssay.MICROFLUIDIC){
+		else if (assayType == CMAssay.MICROFLUIDIC){
+			long expTime = currentTime/1000 + channel.getTimeToReach();
 			try{
-				concentrationData.write(nowString + "\t");
+				concentrationData.write(nowString + "\t" + summaryFormat.format(expTime) + "\t");
 				channel.writeConcentrationData(concentrationData, currentTime/1000, false);
 				concentrationData.newLine();
 				concentrationData.flush();
@@ -519,7 +524,8 @@ public class CMSimulation extends DemoApplication{
 	}
 	
 	public void outputCellData(){
-		long nowTimeMS = clock.getTimeMilliseconds()- (startTime/1000);
+		//System.out.println("Output Cell Data");
+		long nowTimeMS = (currentTime)/1000;
 		Date nowTime = new Date(nowTimeMS);
 		String nowString = summaryFormat.format(nowTime);
 		Vector3f vel = new Vector3f();
@@ -539,6 +545,7 @@ public class CMSimulation extends DemoApplication{
 			try{
 				cellData.write(nowString + "\t" + bioObj.getType() + "\t" + bioObj.getID() + "\t" + com.x + "\t" + com.y + "\t" + com.z + "\t" + vel.x + "\t" + vel.y + "\t" + vel.z);
 				cellData.newLine();
+				cellData.flush();
 			}
 			catch(IOException e){
 				System.out.println("Cannot write to position file");
@@ -548,11 +555,12 @@ public class CMSimulation extends DemoApplication{
 	}
 	
 	public void outputMembraneData(){
+		//System.out.println("Output Membrane Data");
 		int numPro = proteins.size();
 		if (numPro <= 0){
 			return;
 		}
-		long nowTimeMS = clock.getTimeMilliseconds()- (startTime/1000);
+		long nowTimeMS = (currentTime - startTime)/1000;
 		Date nowTime = new Date(nowTimeMS);
 		String nowString = summaryFormat.format(nowTime);
 		for (int i = 0 ;i < numPro; i++){
@@ -568,6 +576,7 @@ public class CMSimulation extends DemoApplication{
 							//membraneData.write("Time Since Sim Start\tProtein\tCellID\tSegmentID\tBoundDensity\tUnboundDensity");
 							membraneData.write(nowString + "\t" + proteins.getQuick(i).getName() + "\t" + cellID + "\t" + k + "\t" + cell.getDensity(k, i, false) + "\t" + cell.getDensity(k, i, true));
 							membraneData.newLine();
+							membraneData.flush();
 						}
 						catch(IOException e){
 							System.out.println("Cannot write to membrane data file");
@@ -637,6 +646,9 @@ public class CMSimulation extends DemoApplication{
 		catch(IOException e){
 			System.out.println("Unable to close output files");
 			System.out.println(e.toString());
+		}
+		if (concentrationSolver != null){
+			concentrationSolver.destroy();
 		}
 	}
 	/*

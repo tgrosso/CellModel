@@ -90,7 +90,7 @@ public class CMLWJGL {
 			if (Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) || Keyboard.isKeyDown(Keyboard.KEY_RSHIFT)) modifiers |= KeyEvent.SHIFT_DOWN_MASK;
 			if (Keyboard.isKeyDown(Keyboard.KEY_LCONTROL) || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL)) modifiers |= KeyEvent.CTRL_DOWN_MASK;
 			if (Keyboard.isKeyDown(Keyboard.KEY_LMETA) || Keyboard.isKeyDown(Keyboard.KEY_RMETA)) modifiers |= KeyEvent.ALT_DOWN_MASK;
-			
+		
 			while (Keyboard.next()) {
 				if (Keyboard.getEventCharacter() != '\0') {
 					demoApp.keyboardCallback(Keyboard.getEventCharacter(), Mouse.getX(), Mouse.getY(), modifiers);
@@ -102,7 +102,7 @@ public class CMLWJGL {
 				else {
 					demoApp.specialKeyboardUp(Keyboard.getEventKey(), Mouse.getX(), Mouse.getY(), modifiers);
 				}
-				
+									
 				if (Keyboard.getEventKey() == Keyboard.KEY_ESCAPE) quit = true;
 				if (Keyboard.getEventKey() == Keyboard.KEY_Q) quit = true;
 			}
@@ -132,10 +132,10 @@ public class CMLWJGL {
 			}
 		}
 		
-		//This line is the whole point of making this class
+			//This line is the whole point of making this class
 		demoApp.wrapUp();
-		
-		System.exit(0);
+		Display.destroy();
+		demoApp.destroy();
 		return 0;
 	}
 	

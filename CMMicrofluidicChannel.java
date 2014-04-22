@@ -38,32 +38,25 @@ public class CMMicrofluidicChannel {
 	private float distFromSource, totalLength;
 	private float[] wallColor = {.4f, .2f, .2f};
 	private float[] baseConcColor = {1.0f, .9f, .9f};
-	private float[] concentrations;
 	private int measureSegments = 5;
 	private CMSimulation sim;
-	private CMBioObjGroup cells;
-	private boolean ligandAdded;
-	private long ligandTime; //time ligand added in milliseconds
-	private long timeToSteadyState;
-	private float frontVelocity;
+	private CMConcentrationSolver solver;
+	private long timeToReach = 0;
 	
 	
-	
-	public CMMicrofluidicChannel(CMSimulation s, float srcConc, float snkConc, float d){
-		sourceConcentration = srcConc; //units - nM - nanoMolar
-		sinkConcentration = snkConc; //units - nM - nanoMolar
-		ligandAdded = false;
+	public CMMicrofluidicChannel(CMSimulation s, float d, CMConcentrationSolver sol){
 		sim = s;
 		makeChannel(sim);
 		distFromSource = d;
 		totalLength = 13000f; //13 * 10^5 microns is total length of channel
+		solver = sol;
+		sourceConcentration = solver.getSourceConcentration();
+		sinkConcentration = solver.getSinkConcentration();
+		
 		if (distFromSource + channelWidth > totalLength){
 			distFromSource = totalLength - channelWidth;
 		}
-		ligandTime = 0L;
-		timeToSteadyState = 1 * 60 * 60 * 1000; //11 hours in milliseconds - set to 1 hour to speed up
-		frontVelocity = (float)totalLength/timeToSteadyState;
-		//System.out.println("Front Velocity: " + frontVelocity + " micron/ms");
+		timeToReach = sol.timeToReach(distFromSource, .01f);
 	}
 	
 	public void makeChannel(CMSimulation sim){
@@ -119,45 +112,12 @@ public class CMMicrofluidicChannel {
 		sim.setBaseCameraDistance(110f);
 	}
 	
-	public void addLigand(){
-		if (!ligandAdded){
-			ligandTime = sim.getCurrentTimeMicroseconds()/1000;
-			ligandAdded = true;
-			//System.out.println("Ligand Added: " + ligandTime);
-		}
-	}
 	
 	public float getConcentration(float distFromMin, long time){
 		//time is in milliseconds - NOT microseconds!
-		if (!ligandAdded){
-			//No ligand added yet
-			return 0f;
-		}
-		//This generates a linear gradient where the front travels the entire length of the channel in 11 hours
 		float dist = distFromSource + distFromMin;
-		long timeFromLigand = time - ligandTime;
-		float frontPosition = timeFromLigand * frontVelocity; //distance from source
-		
-		if (timeFromLigand > timeToSteadyState){
-			timeFromLigand = timeToSteadyState; //any time after steady state doesn't matter anymore
-		}
-		
-		float m = (sinkConcentration - sourceConcentration)/frontPosition;
-		float y_int = sourceConcentration;
-		float concentration = (m * dist) + y_int;
-		
-		/*
-		System.out.print("Time from Ligand: " + timeFromLigand);
-		System.out.print(" Front Position: " + frontPosition);
-		System.out.print(" Distance: " + dist);
-		System.out.print(" Concentration slope: " + m);
-		System.out.println(" Concentration: " + concentration);
-		*/
-		
-		if (concentration < 0f){
-			concentration = 0f;
-		}
-		return concentration;
+		long experimentalTime = time + timeToReach;
+		return solver.getConcentration(dist, time);
 	}
 	
 	
@@ -174,6 +134,10 @@ public class CMMicrofluidicChannel {
 		maxVector.set((float)(channelWidth/2.0),(float)(channelHeight/2.0), (float)(channelDepth/2.0));
 		//System.out.println(maxVector);
 		return maxVector;
+	}
+	
+	public long getTimeToReach(){
+		return timeToReach;
 	}
 	
 	public void writeConcentrationData(BufferedWriter output, long time, boolean title){
@@ -226,16 +190,13 @@ public class CMMicrofluidicChannel {
 		
 		public boolean specialRender(IGL gl, Transform t){
 			//This just draws an representation of the concentration gradient behind the channel
-			float left = channel.channelWidth/2;
 			float right = -channel.channelWidth/2;
-			float top = channel.channelHeight/2;
 			float bottom = -channel.channelHeight/2;
-			//float z = -(float)((channel.channelDepth+channel.wallThick+4)/2.0);
 			float z = 0;
 			//System.out.println("left: " + left + " right: " + right + " top: " + top + " bottom: " + bottom);
 		
-			
 			float blockWidth = channelWidth/drawnSegments;
+			//get the time in milliseconds
 			long ti = channel.sim.getCurrentTimeMicroseconds()/1000;
 			//System.out.println("blockwidth: " + blockWidth + " time: " + ti); 
 			
@@ -259,23 +220,6 @@ public class CMMicrofluidicChannel {
 			}
 			GL11.glEnd();
 			
-			/*
-			GL11.glColor3f(0.5f, 0.0f, 1.0f);
-			GL11.glBegin(GL_QUADS);
-             
-			GL11.glNormal3f( 0f, 0f, -1f); 
-			GL11.glColor3f(0.0f, 0.0f, 1.0f);
-			GL11.glVertex3f(left,top,z);
-			GL11.glColor3f(1.0f, 0.0f, 0.0f);
-			GL11.glVertex3f(right,top,z);
-			GL11.glColor3f(0.0f, 1.0f, 0.0f);
-			GL11.glVertex3f(right,bottom,z);
-			GL11.glColor3f(1.0f, 1.0f, 0.0f);
-			GL11.glVertex3f(left,bottom,z);
-			
-             GL11.glEnd();
-             
-             */
 			gl.glPopMatrix();
 			
 			return true;

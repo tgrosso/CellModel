@@ -126,7 +126,7 @@ public class CMSegmentedCell extends CMCell{
 		sim.setNeedsGImpact(true);
 		
 		cellSurfaceArea = (float)(4.0 * Math.PI * radius * radius); //an initial approximation
-		System.out.println("Total surface area: " + cellSurfaceArea);
+		//System.out.println("Total surface area: " + cellSurfaceArea);
 		triangleAreas = new float[numSegments];
 		color = new float[numSegments][];
 		for (int i = 0; i < numSegments; i++){
@@ -135,7 +135,7 @@ public class CMSegmentedCell extends CMCell{
 				color[i][j] = (float)Math.random();
 			}
 			triangleAreas[i] = cellSurfaceArea/numSegments;
-			System.out.println("Triangle " + i + ": Area " + triangleAreas[i]);
+			//System.out.println("Triangle " + i + ": Area " + triangleAreas[i]);
 		}
 		objectType = "Segmented Cell";
 		//System.out.println("Segmented Cell Created");

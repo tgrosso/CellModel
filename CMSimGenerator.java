@@ -46,8 +46,10 @@ public class CMSimGenerator {
 	public float sinkConc = 0;
 	public float sourceConc = 0;
 	public float distFromSource = 0;
-	public long endTime = 60 * 1000; //length of run in milliseconds
+	public long endTime = 30; //length of run in SECONDS
+	public long timeToSteadyState = 11*60*60; //time to steady state in seconds
 	public boolean generateImages = false;
+	public float secBetweenOutput = .5f;
 	public long seed = 0;
 	
 	public CMSimGenerator(File base, long sd){
@@ -160,8 +162,32 @@ public class CMSimGenerator {
 				System.err.println("distFromSource must be a float. Found " + val + ". Using default");
 			}
 		}
+		else if (v.compareTo("secBetweenOutput") == 0){
+			try{
+				secBetweenOutput = Float.parseFloat(val);
+				System.out.println("secBetweenOutput set to " + secBetweenOutput);
+			}
+			catch(NumberFormatException e){
+				System.err.println("secBetweenOutput must be a float. Found " + val + ". Using default");
+			}
+		}
 		else if (v.compareTo("captureImages") == 0){
-			generateImages = Boolean.parseBoolean(val);
+			try{
+				generateImages = Boolean.parseBoolean(val);
+				System.out.println("generateImages set to " + generateImages);
+			}
+			catch(NumberFormatException e){
+				System.err.println("generateImages must be a boolean. Found " + val + ". Using default");
+			}
+		}
+		else if (v.compareTo("endTime") == 0){
+			try{
+				endTime = Long.parseLong(val);
+				System.out.println("endTime set to " + endTime);
+			}
+			catch(NumberFormatException e){
+				System.err.println("endTime must be a long. Found " + val + ". Using default");
+			}
 		}
 		else{
 			System.err.println("Variable " + v + " not known.");
@@ -176,35 +202,29 @@ public class CMSimGenerator {
 	    String dateString = df.format(now);
 	    dataDir = new File("CM-" + dateString);
 		dataDir.mkdir();
+		CMSimGenerator[] csgs = null;
 		
 		if (args.length > 0){
+			csgs = new CMSimGenerator[args.length];
 			for (int i = 0; i < args.length; i++){
 				System.out.println(args[i]);
 				File f = new File(args[i]);
-				CMSimGenerator csg = new CMSimGenerator(f, dataDir, seed);
-				
-				CMSimulation sim = new CMSimulation(LWJGL.getGL(), csg);
-				sim.initPhysics();
-				sim.getDynamicsWorld().setDebugDrawer(new GLDebugDrawer(LWJGL.getGL()));
-
-				try{
-					CMLWJGL.main(args, csg.screenWidth, csg.screenHeight, "Cell Simulation", sim);
-				}
-				catch(LWJGLException e){
-					System.err.println("Could not run simulation.  Error: " + e.toString());
-				}
+				csgs[i] = new CMSimGenerator(f, dataDir, seed);
 			}
 		}
 		else{
+			csgs = new CMSimGenerator[1];
 			System.err.println("No input files - Using default values.");
-			CMSimGenerator csg = new CMSimGenerator(dataDir, seed);
-			
-			CMSimulation sim = new CMSimulation(LWJGL.getGL(), csg);
+			csgs[1] = new CMSimGenerator(dataDir, seed);
+		}
+		
+		for (int i = 0; i < csgs.length; i++){
+			CMSimulation sim = new CMSimulation(LWJGL.getGL(), csgs[i]);
 			sim.initPhysics();
 			sim.getDynamicsWorld().setDebugDrawer(new GLDebugDrawer(LWJGL.getGL()));
-			
+
 			try{
-				CMLWJGL.main(args, csg.screenWidth, csg.screenHeight, "Cell Simulation", sim);
+				CMLWJGL.main(args, csgs[i].screenWidth, csgs[i].screenHeight, "Cell Simulation", sim);
 			}
 			catch(LWJGLException e){
 				System.err.println("Could not run simulation.  Error: " + e.toString());
