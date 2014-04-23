@@ -68,15 +68,15 @@ public class CMSegmentedCell extends CMCell{
 	private float volume;
 	private float[] freeColor = {1.0f, .8f, .8f};
 	private float[] boundColor = {.8f, .8f, 1.0f};
-	private float[][] freeProteins;
-	private float[][] boundProteins;
+	private long[][] freeProteins;
+	private long[][] boundProteins;
 	private float[] triangleAreas;
+	private float[] ligandConc;
 	private float cellSurfaceArea;
 	private boolean viewFreeReceptors = true;
 	private float[][] color;
 	private float maxVel = 25f;
 	private int currentVisualizingProtein = -1;
-	private long lastTimeMilliseconds, currentTimeMilliseconds;
 	
 	private Transform trans;
 	private Vector3f origin;
@@ -125,25 +125,32 @@ public class CMSegmentedCell extends CMCell{
 		
 		sim.setNeedsGImpact(true);
 		
-		cellSurfaceArea = (float)(4.0 * Math.PI * radius * radius); //an initial approximation
 		//System.out.println("Total surface area: " + cellSurfaceArea);
 		triangleAreas = new float[numSegments];
+		
+		triangleAreaCallback areaCallback = new triangleAreaCallback(this);
+		cellShape.processAllTriangles(areaCallback, aabbMin, aabbMax);
+		cellSurfaceArea = 0;
+		for (int i = 0; i < numSegments; i++){
+			cellSurfaceArea += triangleAreas[i];
+			//System.out.println("triangle " + i + " surface area " + triangleAreas[i]);
+		}
+		//System.out.println("surface area: " + cellSurfaceArea);
+		
+		ligandConc = new float[numSegments];
 		color = new float[numSegments][];
 		for (int i = 0; i < numSegments; i++){
 			color[i] = new float[3];
 			for (int j = 0; j < 3; j++){
 				color[i][j] = (float)Math.random();
 			}
-			triangleAreas[i] = cellSurfaceArea/numSegments;
-			//System.out.println("Triangle " + i + ": Area " + triangleAreas[i]);
+			ligandConc[i] = 0f;
 		}
 		objectType = "Segmented Cell";
 		//System.out.println("Segmented Cell Created");
 		if (setPros){
 			setProteins();
 		}
-		lastTimeMilliseconds = 0L;
-		currentTimeMilliseconds = sim.getCurrentTimeMicroseconds()/1000;
 	}
 	
 	public static CMBioObjGroup fillSpace(CMSimulation sim, int numCell, float r, int dl, Vector3f minP, Vector3f maxP, String name, boolean setPro){
@@ -194,6 +201,50 @@ public class CMSegmentedCell extends CMCell{
 		return theCells;
 	}
 	
+	public static CMBioObjGroup randomFillSurface(CMSimulation sim, int numCell, float r, int dl, Vector3f minP, Vector3f maxP, String name, boolean setPro){
+		//Places cells just above a surface with numCells
+		//System.out.println("minP " + minP + " maxP " + maxP);
+		int padding = 6;
+		int x_cells = (int)((maxP.x - minP.x) / (2 * r + padding));
+		int z_cells = (int)((maxP.z - minP.z) / (2 * r + padding));
+		float col_width = (maxP.x - minP.x) / x_cells;
+		float row_width = (maxP.z - minP.z) / z_cells;
+		float center_y = minP.y + r + (padding/2.0f);
+		//System.out.println("x cells " + x_cells + " z cells " + z_cells);
+		//System.out.println("colWidth " + col_width + " row_width " + row_width);
+		int max_cells = x_cells * z_cells;
+		int num = numCell;
+		if (num > max_cells){
+			num = max_cells;
+		}
+		
+		//get a random order for placing the cells
+		int[] indices = new int[max_cells];
+		for (int i = 0; i < max_cells; i++){
+			indices[i] = i;
+		}
+		for (int i = 0; i < max_cells; i++){
+			int swap_index = (int)(sim.nextRandomF() * max_cells);
+			int temp = indices[i];
+			indices[i] = indices[swap_index];
+			indices[swap_index] = temp;
+		}
+		
+		
+		CMBioObjGroup theCells = new CMBioObjGroup(sim, name);
+		
+		for (int i = 0; i < num; i++){
+			int row = indices[i]/x_cells;
+			int col = indices[i]%x_cells;
+			float center_x = minP.x + (col * col_width) + padding/2.0f + r;
+			float center_z = minP.z + (row * row_width) + padding/2.0f + r;
+			CMSegmentedCell newCell = new CMSegmentedCell(sim, r, new Vector3f(center_x,center_y,center_z), dl, setPro);
+			theCells.addObject(newCell);
+			newCell.setCellGravity();
+		}
+		return theCells;
+	}
+	
 	public float getRadius(){
 		return this.radius;
 	}
@@ -220,15 +271,15 @@ public class CMSegmentedCell extends CMCell{
 		int numProteins = sim.getNumProteins();
 		if (numProteins > 0){
 			int numTriangles = cellShape.getNumTriangles();
-			freeProteins = new float[numTriangles][numProteins];
-			boundProteins = new float[numTriangles][numProteins];
+			freeProteins = new long[numTriangles][numProteins];
+			boundProteins = new long[numTriangles][numProteins];
 			for (int i = 0; i < numTriangles; i++){
-				freeProteins[i] = new float[numProteins];
-				boundProteins[i] = new float[numProteins];
+				freeProteins[i] = new long[numProteins];
+				boundProteins[i] = new long[numProteins];
 				for (int j = 0; j < numProteins; j++){
-					float totalProteins = sim.getProtein(j).getBaseDensity() * cellSurfaceArea;
-					freeProteins[i][j] = totalProteins*(triangleAreas[i]/cellSurfaceArea);
-					boundProteins[i][j] = 0f;
+					float totalProteins = sim.getProtein(j).getInitialProteins(1.0f);
+					freeProteins[i][j] = sim.getProtein(j).getInitialProteins(triangleAreas[i]/cellSurfaceArea);
+					boundProteins[i][j] = (long)0;
 					//System.out.println("Total Protein: " + totalProteins + " Seg: " + i + " Pro: " + j + " Free: " + freeProteins[i][j] + " Bound: " + boundProteins[i][j]);
 				}
 			}
@@ -249,6 +300,10 @@ public class CMSegmentedCell extends CMCell{
 					return;
 				}
 				
+				//Find out the triangle which is colliding
+				//Find the 
+				
+				/*
 				//Get the position and orientation of the constraint
 				Vector3f positionA = new Vector3f();
 				Vector3f positionB = new Vector3f();
@@ -317,13 +372,13 @@ public class CMSegmentedCell extends CMCell{
 						boundProteins += newBoundProteins;
 						System.out.println("Free Receptors: " + freeReceptors + " Bound: " + boundReceptors);
 					} */
-				}
-
+				//}
+				/*
 				//System.out.println("Bound: " + boundProteins + " Max: " + maxProteins);
 				CMGenericConstraint con = new CMGenericConstraint(sim, body, c.getRigidBody(), myTrans, otherTrans, true, 5000, 50, collId, boundProteins, maxProteins, triangle);
 				con.checkIn();
 				sim.addConstraint(con);
-				 
+				*/
 			}
 		}
 	}
@@ -367,8 +422,6 @@ public class CMSegmentedCell extends CMCell{
 		//update the proteins
 		updateProteinsCallback proCallback = new updateProteinsCallback(this);
 		cellShape.processAllTriangles(proCallback, aabbMin, aabbMax);
-		lastTimeMilliseconds = currentTimeMilliseconds;
-		currentTimeMilliseconds = sim.getCurrentTimeMicroseconds()/1000;
 		
 		//set the segment colors
 		float percent = 0f;
@@ -377,11 +430,11 @@ public class CMSegmentedCell extends CMCell{
 		float[] c = new float[3];
 		for (int i = 0; i < numSegments; i++){
 			if (viewFreeReceptors){
-				percent = freeProteins[i][currentVisualizingProtein]/maxDensity;
+				percent = (freeProteins[i][currentVisualizingProtein]/triangleAreas[i])/maxDensity;
 				c = freeColor;
 			}
 			else{
-				percent = boundProteins[i][currentVisualizingProtein]/maxDensity;
+				percent = boundProteins[i][currentVisualizingProtein]/triangleAreas[i]/maxDensity;
 				c = boundColor;
 			}
 			setSegmentColor(i, c[0] * percent, c[1] * percent, c[2] * percent);
@@ -433,6 +486,10 @@ public class CMSegmentedCell extends CMCell{
 		return 0f;
 	}
 	
+	public float getTriangleLigandConc(int index){
+		return ligandConc[index];
+	}
+	
 	private static class drawSegmentsCallback extends TriangleCallback {
 		private IGL gl;
 		CMSegmentedCell parent;
@@ -470,6 +527,37 @@ public class CMSegmentedCell extends CMCell{
 		}
 		
 		public void processTriangle(Vector3f[] triangle, int partId, int triangleIndex) {
+			//find the ligand concentration
+			//System.out.print("Current time " + time + " area: " + area);
+			float x_dist = (float)((triangle[0].x + triangle[1].x + triangle[2].x)/3.0);
+			//System.out.print(" x dist: " + x_dist);
+			float ligand = parent.sim.getLigandConcentration(x_dist, parent.sim.getCurrentTimeMicroseconds()/1000);
+			parent.ligandConc[triangleIndex] = ligand;
+			float deltaTime = parent.sim.getDeltaTimeMilliseconds()/60f/1000;
+			//System.out.println(" deltaTime: " + deltaTime);
+			if (deltaTime > 0){
+				for (int i = 0; i < parent.sim.getNumProteins(); i++){
+					//update the free receptors
+					//parent.freeProteins[triangleIndex][i] = parent.sim.getProtein(i).updateFreeProteins(area, ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], deltaTime);
+					parent.freeProteins[triangleIndex][i] = parent.sim.getProtein(i).updateFreeReceptors(ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], parent.triangleAreas[triangleIndex]/parent.cellSurfaceArea, deltaTime);
+					//update the bound receptors
+					parent.boundProteins[triangleIndex][i] = parent.sim.getProtein(i).updateBoundReceptors(ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], deltaTime);
+					//System.out.println("Segment: " + triangleIndex + " free: " + parent.freeDensities[triangleIndex][i] + " bound: " + parent.boundDensities[triangleIndex][i]);
+				}
+			}
+			
+		}
+	}
+	
+	private static class triangleAreaCallback extends TriangleCallback {
+		CMSegmentedCell parent;
+
+		public triangleAreaCallback(CMSegmentedCell p) {
+			this.parent = p;
+		}
+		
+		public void processTriangle(Vector3f[] triangle, int partId, int triangleIndex) {
+			//System.out.println("Processing triangle areas");
 			//find the area
 			float ab_squ = (triangle[1].x - triangle[0].x) * (triangle[1].x - triangle[0].x) +
 					(triangle[1].y - triangle[0].y) * (triangle[1].y - triangle[0].y) +
@@ -483,29 +571,10 @@ public class CMSegmentedCell extends CMCell{
 				
 			float area = (float)(.25 * Math.sqrt(4 * ab_squ * bc_squ - (Math.pow(ab_squ + bc_squ - ca_squ, 2))));
 			parent.triangleAreas[triangleIndex] = area;
-
-			//find the ligand concentration
-			long time = parent.currentTimeMilliseconds;
-			//System.out.print("Current time " + time + " area: " + area);
-			float x_dist = (float)((triangle[0].x + triangle[1].x + triangle[2].x)/3.0);
-			//System.out.print(" x dist: " + x_dist);
-			float ligand = parent.sim.getLigandConcentration(x_dist, time);
-			//System.out.print(" ligand: " + ligand);
-			//need delta time in minutes
-			float deltaTime = (time - parent.lastTimeMilliseconds)/1000f/60f; //convert to minutes
-			//System.out.println(" deltaTime: " + deltaTime);
-			if (deltaTime > 0){
-				for (int i = 0; i < parent.sim.getNumProteins(); i++){
-					//update the free receptors
-					//parent.freeProteins[triangleIndex][i] = parent.sim.getProtein(i).updateFreeProteins(area, ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], deltaTime);
-					parent.freeProteins[triangleIndex][i] = parent.sim.getProtein(i).updateFreeReceptors(ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], area/parent.cellSurfaceArea, deltaTime);
-					//update the bound receptors
-					parent.boundProteins[triangleIndex][i] = parent.sim.getProtein(i).updateBoundReceptors(ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], deltaTime);
-					//System.out.println("Segment: " + triangleIndex + " free: " + parent.freeDensities[triangleIndex][i] + " bound: " + parent.boundDensities[triangleIndex][i]);
-				}
-			}
+			//System.out.println("triangle " + triangleIndex + " area " + area);
 			
 		}
 	}
+
 
 }

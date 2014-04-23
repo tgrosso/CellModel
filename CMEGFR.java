@@ -7,7 +7,7 @@ public class CMEGFR extends CMMembraneProtein{
 	float k_t = .02f; //internalization rate of unbound receptor - units /min
 	float k_D = 2.47f; //Dissociation constant - units nM
 	//Data taken from human mammary epithelial cells - diameter about 15 micrometer
-	float R_t = 200000f; 
+	long R_t = 200000; 
 		//steady state receptor abundance for whole cell units molecules
 	float k_on=k_off/k_D; //forward rate of ligand binding
 	float Q_r = R_t * k_t; //Synthesization rate - units nM/min
@@ -17,7 +17,7 @@ public class CMEGFR extends CMMembraneProtein{
 	}
 	
 	@Override
-	protected float updateFreeReceptors(float ligandConcentration, float currentBound, float currentFree, float portion, float deltaTime){
+	protected long updateFreeReceptors(float ligandConcentration, long currentBound, long currentFree, float portion, float deltaTime){
 		//ligandConcentration units is nM
 		//receptor units are molecules
 		//surface area units is micron^2
@@ -27,39 +27,43 @@ public class CMEGFR extends CMMembraneProtein{
 		
 		//System.out.println("***Updating Free EGFR***");
 		//System.out.print("Ligand Conc " + ligandConcentration);
-		float R = currentFree; //Number of free receptors on surface
+		long R = currentFree; //Number of free receptors on surface
 		//System.out.print(" Free Receptors: " + R);
-		float C = currentBound; //Number of bound receptors on surface
+		long C = currentBound; //Number of bound receptors on surface
 		//System.out.print(" Bound Receptors: " + C);
 		float dR = deltaTime * (-k_on * R * ligandConcentration + k_off * C - k_t * R + Q_r * portion);
 		//System.out.print(" delta R = " + dR);
 		float newFree = R + dR;
 		//System.out.println( " newFree = " + newFree);
 		
-		return newFree;
+		return (long)(newFree);
 	}
 	
 	@Override
-	protected float updateBoundReceptors(float ligandConcentration, float currentBound, float currentFree, float deltaTime){
+	protected long updateBoundReceptors(float ligandConcentration, long currentBound, long currentFree, float deltaTime){
 		//ligandConcentration units is nM
 		//receptor units are molecules
 		//deltaT units is minutes
 		//using forward Euler method
 		//System.out.println("***Updating Bound EGFR***");
 		//System.out.print("Ligand Conc " + ligandConcentration);
-		float R = currentFree; //Number of free receptors on surface
+		long R = currentFree; //Number of free receptors on surface
 		//System.out.print(" Free Receptors: " + R);
-		float C = currentBound; //Number of bound receptors on surface
+		long C = currentBound; //Number of bound receptors on surface
 		//System.out.print(" Bound Receptors: " + C);
 		float dC = deltaTime * (k_on * R * ligandConcentration - k_off * C - k_e * C);
 		//System.out.print(" delta C = " + dC);
 		float newBound = C + dC;
 		//System.out.println( " newBound = " + newBound);
 		
-		return (C + dC);
+		return (long)(newBound);
 	}
 	
 	public boolean bindsToLaminin(){
 		return false;
+	}
+	
+	public long getInitialProteins(float portion){
+		return (long)(R_t * portion);
 	}
 }

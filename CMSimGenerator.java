@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.io.BufferedReader;
+import java.io.PrintWriter;
 import java.util.Date;
 
 import org.lwjgl.LWJGLException;
@@ -77,7 +78,10 @@ public class CMSimGenerator {
 			BufferedReader br = new BufferedReader(isr);
 			String line;
 			
+			PrintWriter pw = new PrintWriter(new File(baseFile, "inputFile.txt"));
+			
 			while ((line = br.readLine()) != null) {
+				pw.println(line);
 				if (line.length() > 0 && !line.contains("\\\\")){
 					int index = line.indexOf('\t');
 					if (index < 0){
@@ -91,6 +95,11 @@ public class CMSimGenerator {
 					setVar(var, value);
 				}
 			}
+			pw.close();
+			br.close();
+			isr.close();
+			fis.close();
+			
 
 		}
 		catch(IOException e){
@@ -106,7 +115,7 @@ public class CMSimGenerator {
 	private void setVar(String v, String val){
 		if (v.compareTo("pdepeDirectory") == 0){
 			pdepeDirectory = val;
-			System.out.println("pdepeDirectory set to " + val);
+			//System.out.println("pdepeDirectory set to " + val);
 		}
 		else if (v.compareTo("numCells") == 0){
 			try{

@@ -52,12 +52,16 @@ public class CMMembraneProtein {
 		return maximumDensity;
 	}
 	
-	protected float updateFreeReceptors(float ligandConcentration, float currentBound, float currentFree, float portion, float deltaTime){
-		return 0f;
+	protected long getInitialProteins(float portion){
+		return 0;
 	}
 	
-	protected float updateBoundReceptors(float ligandConcentration, float currentBound, float currentFree, float deltaTime){
-		return 0f;
+	protected long updateFreeReceptors(float ligandConcentration, long currentBound, long currentFree, float portion, float deltaTime){
+		return 0;
+	}
+	
+	protected long updateBoundReceptors(float ligandConcentration, long currentBound, long currentFree, float deltaTime){
+		return 0;
 	}
 	
 	public boolean bindsToLaminin(){

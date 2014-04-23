@@ -117,6 +117,7 @@ public class CMSimulation extends DemoApplication{
 	private long collisionID = 0L;
 	private double summaryDelay = 50000; //Minimum number of microseconds between summary reports
 	private long startTime, currentTime, lastWriteTime; //Units microseconds
+	private long deltaTime = 0;
 	private boolean firstOutputWritten = false; 
 	private long imageDelay = 1000000/30; //microseconds beteen images => 30 frames per second
 	private long lastImageTime; // last time an images was generated in microseconds
@@ -152,12 +153,12 @@ public class CMSimulation extends DemoApplication{
 					groupData.write("Time Since Sim Start\tGroup Name\tCenter of Mass\tNumber Below Mesh");
 					groupData.newLine();
 					cellData = new BufferedWriter(new FileWriter(baseName + "cellData.csv"));
-					cellData.write("Time Since Sim Start\tType\tID\tCOM x\tCOM y\tCOM z\tLinVelocity x\tLinVelocity y\tLinVelocity z");
+					cellData.write("Time Since Sim Start\tType\tID\tCenter of Mass-x\tCenter of Mass-y\tCenter of Mass-z\tLinVelocity x\tLinVelocity y\tLinVelocity z");
 					cellData.newLine();
 					concentrationData = new BufferedWriter(new FileWriter(baseName + "ligandData.csv"));
 					concentrationData.write("Time Since Sim Start\tExperimental Time\t");
 					membraneData = new BufferedWriter(new FileWriter(baseName + "membraneProData.csv"));
-					membraneData.write("Time Since Sim Start\tProtein\tCellID\tSegmentID\tBoundReceptors\tUnboundReceptors");
+					membraneData.write("Time Since Sim Start\tProtein\tCellID\tSegmentID\tBoundReceptors\tUnboundReceptors\tLigand Concentration");
 					membraneData.newLine();
 					if (generator.generateImages){
 						File imageFile = new File(generator.baseFile, "image");
@@ -188,6 +189,15 @@ public class CMSimulation extends DemoApplication{
 			finished = true;
 		}
 		
+		//TODO - how do we put this into the generator?
+		float[] proColor0 = new float[3];
+		float[] proColor1 = new float[3];
+		proColor0[0] = 1f; proColor0[1] = 0f; proColor0[2]=0f;
+		//proColor1[0] = 1f; proColor1[1] = 1f; proColor1[2]=0f;
+		proteins.add(new CMEGFR(this, proColor0));
+		//proteins.add(new CMIntegrin(this, proColor1));
+		viewingProtein = 0;
+		
 		//Set initial times
 		startTime = clock.getTimeMicroseconds(); //clock is inherited from DemoApplication
 		currentTime = 0;
@@ -215,26 +225,12 @@ public class CMSimulation extends DemoApplication{
 		//Simulation takes place in fluid.  Gravity is set for individual cells
 		dynamicsWorld.setGravity(new Vector3f(0f, 0f, 0f));
 		
-		//TODO - how do we put this into the generator?
-		float[] proColor0 = new float[3];
-		float[] proColor1 = new float[3];
-		proColor0[0] = 1f; proColor0[1] = 0f; proColor0[2]=0f;
-		//proColor1[0] = 1f; proColor1[1] = 1f; proColor1[2]=0f;
-		proteins.add(new CMEGFR(this, proColor0));
-		//proteins.add(new CMIntegrin(this, proColor1));
-		viewingProtein = 0;
-		
 		if(assayType == CMAssay.MICROFLUIDIC){
 			float distFromSource = generator.distFromSource;
 			channel = new CMMicrofluidicChannel(this, distFromSource, concentrationSolver);
 			channel.writeConcentrationData(concentrationData, currentTime, true);
 			
-			CMBioObjGroup microCells = new CMBioObjGroup(this, "RPCs");
-			//CMSegmentedCell cell0 = new CMSegmentedCell(this, 10f, new Vector3f(-50f, -10f, 0f), 1, true); 
-			//addBioObject(cell0);
-			//microCells.addObject(cell0);
-			//cell0.setCellGravity();
-			
+			CMBioObjGroup microCells = CMSegmentedCell.randomFillSurface(this, generator.numCells, 10f, 1, channel.getMinChannelVector(), channel.getMaxChannelVector(), "RPC", true);
 			objectGroups.add(microCells);
 		}
 		
@@ -266,16 +262,12 @@ public class CMSimulation extends DemoApplication{
 		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		// simple dynamics world doesn't handle fixed-time-stepping
 		long newTime = clock.getTimeMicroseconds();
-		float deltaTime = newTime - currentTime;
+		deltaTime = newTime - currentTime;
 		currentTime = newTime - startTime;
 		if (currentTime/1000/1000 > generator.endTime){
 			System.out.println("Time is up. " + currentTime);
 			finished = true;
 		}
-		
-		//if (currentTime > 2000 && assayType == CMAssay.MICROFLUIDIC){
-		//	channel.addLigand();
-		//}
 
 		// step the simulation
 		if (dynamicsWorld != null) {
@@ -316,9 +308,6 @@ public class CMSimulation extends DemoApplication{
 		}
 
 		int index = 0;
-		if (constraints.size() > 0){
-			//System.out.println("Num constraints: " + constraints.size());
-		}
 		while(index < constraints.size()){
 			CMConstraint con = constraints.getQuick(index);
 			con.updateTime();
@@ -327,10 +316,10 @@ public class CMSimulation extends DemoApplication{
 			}
 			else{
 				index++;
-				CMRigidBody objA = (CMRigidBody)con.getConstraint().getRigidBodyA();
-				objA.getParent().bind();
-				CMRigidBody objB = (CMRigidBody)con.getConstraint().getRigidBodyB();
-				objB.getParent().bind();
+				//CMRigidBody objA = (CMRigidBody)con.getConstraint().getRigidBodyA();
+				//objA.getParent().bind();
+				//CMRigidBody objB = (CMRigidBody)con.getConstraint().getRigidBodyB();
+				//objB.getParent().bind();
 			}
 		}
 
@@ -484,6 +473,7 @@ public class CMSimulation extends DemoApplication{
 	public void outputSummary(){
 		//System.out.println("Output Suumary");
 		long nowTimeMS = (currentTime)/1000;
+		//System.out.println("Summary nowTime " + nowTimeMS);
 		Date nowTime = new Date(nowTimeMS);
 		String nowString = summaryFormat.format(nowTime);
 		
@@ -526,6 +516,7 @@ public class CMSimulation extends DemoApplication{
 	public void outputCellData(){
 		//System.out.println("Output Cell Data");
 		long nowTimeMS = (currentTime)/1000;
+		//System.out.println("Cell data nowTime " + nowTimeMS);
 		Date nowTime = new Date(nowTimeMS);
 		String nowString = summaryFormat.format(nowTime);
 		Vector3f vel = new Vector3f();
@@ -560,7 +551,8 @@ public class CMSimulation extends DemoApplication{
 		if (numPro <= 0){
 			return;
 		}
-		long nowTimeMS = (currentTime - startTime)/1000;
+		long nowTimeMS = (currentTime)/1000;
+		//System.out.println("Membrane nowTime " + nowTimeMS);
 		Date nowTime = new Date(nowTimeMS);
 		String nowString = summaryFormat.format(nowTime);
 		for (int i = 0 ;i < numPro; i++){
@@ -574,7 +566,7 @@ public class CMSimulation extends DemoApplication{
 					for (int k = 0; k < numSeg; k++){
 						try{
 							//membraneData.write("Time Since Sim Start\tProtein\tCellID\tSegmentID\tBoundDensity\tUnboundDensity");
-							membraneData.write(nowString + "\t" + proteins.getQuick(i).getName() + "\t" + cellID + "\t" + k + "\t" + cell.getDensity(k, i, false) + "\t" + cell.getDensity(k, i, true));
+							membraneData.write(nowString + "\t" + proteins.getQuick(i).getName() + "\t" + cellID + "\t" + k + "\t" + cell.getDensity(k, i, false) + "\t" + cell.getDensity(k, i, true) + "\t" + cell.getTriangleLigandConc(k));
 							membraneData.newLine();
 							membraneData.flush();
 						}
@@ -591,6 +583,11 @@ public class CMSimulation extends DemoApplication{
 	
 	public long getCurrentTimeMicroseconds(){
 		return currentTime;
+	}
+	
+	public long getDeltaTimeMilliseconds(){
+		//delta time in Milliseconds
+		return deltaTime/1000;
 	}
 	
 	public void setBaseCameraDistance(float d){

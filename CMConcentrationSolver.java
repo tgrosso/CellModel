@@ -115,11 +115,11 @@ public class CMConcentrationSolver {
 				fis.close();
 			}
 			catch(FileNotFoundException e){
-				System.err.print("Cannot read distance file. Using Linear gradient");
+				System.err.println("Cannot read distance file. Using Linear gradient");
 				usePDE = false;
 			}
 			catch(IOException a){
-				System.err.print("Cannot read distance file. Using Linear gradient");
+				System.err.println("Cannot read distance file. Using Linear gradient");
 				usePDE = false;
 			}
 		}
@@ -156,12 +156,15 @@ public class CMConcentrationSolver {
 		System.out.println("Find Concentration at distance 12900 micron from source at time 1000000. (Should be 1.176647787*10^-42)");
 		System.out.println(getConcentration(12900, 1000000));
 		*/
-		
+		/*
 		System.out.println("Testing time to reach");
 		System.out.println("Find time to reach 0 micron from source with threshold .1 (should be 0)");
 		System.out.println(timeToReach(0, .1f));
-		System.out.println("Find time to reach 2700 micron from source with threshold .1 (should be 0)");
+		System.out.println("Find time to reach 2700 micron from source with threshold .1 (should be 3036000 with pdepe)");
 		System.out.println(timeToReach(2700, .1f));
+		System.out.println("Find time to reach 13000 micron from source with threshold .1 (should be ?)");
+		System.out.println(timeToReach(13000, .1f));
+		*/
 	}
 	
 	private void writeTemplate() throws IOException{

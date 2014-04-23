@@ -98,7 +98,7 @@ public class CMMicrofluidicChannel {
 		position.set((float)(-(channelWidth+wallThick)/2.0), 0f, 0f);
 		nextWall = new CMWall(sim, wallThick, channelHeight, channelDepth, position);
 		nextWall.setColor(wallColor[0], wallColor[1], wallColor[2]);
-		nextWall.setVisible(true);
+		nextWall.setVisible(false);
 		sim.addBioObject(nextWall);
 		
 		//front
