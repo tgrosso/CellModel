@@ -122,7 +122,7 @@ public class CMSimulation extends DemoApplication{
 	private long imageDelay = 1000000/30; //microseconds beteen images => 30 frames per second
 	private long lastImageTime; // last time an images was generated in microseconds
 	private File dataDir = null, solverDir = null, templateDir = null;
-	private BufferedWriter groupData = null, cellData = null, concentrationData = null, membraneData = null, pdeData = null;
+	private BufferedWriter groupData = null, cellData = null, concentrationData = null, membraneData = null, pdeData = null, logfile = null;
 	
 	private CMConcentrationSolver concentrationSolver;
 	private long timeBetweenFrames = 60*1000000; //microseconds per frame
@@ -160,6 +160,9 @@ public class CMSimulation extends DemoApplication{
 					membraneData = new BufferedWriter(new FileWriter(baseName + "membraneProData.csv"));
 					membraneData.write("Time Since Sim Start\tProtein\tCellID\tSegmentID\tBoundReceptors\tUnboundReceptors\tLigand Concentration");
 					membraneData.newLine();
+					logfile = new BufferedWriter(new FileWriter(baseName + "logfile.txt"));
+					logfile.newLine();
+					
 					if (generator.generateImages){
 						File imageFile = new File(generator.baseFile, "image");
 						imageFile.mkdirs();
@@ -167,13 +170,27 @@ public class CMSimulation extends DemoApplication{
 					}
 				}
 				else {
-					System.err.println("No base file given!");
-					System.err.println("Cannot generate output files!");
+					String s = "No base file given!.";
+					String p = "Cannot generate output files!";
+					logfile.write(s);
+					logfile.write(p);
+					//System.err.println("No base file given!");
+					//System.err.println("Cannot generate output files!");
 				}
 	            
 		} catch (IOException e) {
-	        	System.err.println("Cannot generate output files!");
-	        	System.err.println("IOException: " + e.toString());
+				String s = "Cannot generate output files!";
+				String p = "IOException: ";
+				try {
+					logfile.write(s);
+					logfile.write(p + e.toString());
+				} catch (IOException e1) {
+					// TODO Auto-generated catch block
+					e1.printStackTrace();
+				}
+				
+	        	//System.err.println("Cannot generate output files!");
+	        	//System.err.println("IOException: " + e.toString());
 		}
 		
 		
@@ -185,8 +202,15 @@ public class CMSimulation extends DemoApplication{
 			//Can we check to see if one already exists?
 		}
 		else if (generator.sinkConc > generator.sourceConc){
-			System.out.println("Cannot have source Concentration less than sink Concentration! Exitng.");
-			finished = true;
+			String s = "Cannot have source Concentration less than sink Concentration! Exitng.";
+			try {
+				logfile.write(s);
+				finished = true;
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			//System.out.println("Cannot have source Concentration less than sink Concentration! Exitng.");
+			
 		}
 		
 		//TODO - how do we put this into the generator?
@@ -492,8 +516,17 @@ public class CMSimulation extends DemoApplication{
 					groupData.newLine();
 				}
 				catch(IOException e){
-					System.out.println("Error writing data to summary file.");
-					System.out.println(e.toString());
+					String s = "Error writing data to summary file.";
+					try {
+						logfile.write(s);
+						logfile.write(e.toString());
+					} catch (IOException e1) {
+						// TODO Auto-generated catch block
+						e1.printStackTrace();
+					}
+					
+					//System.out.println("Error writing data to summary file.");
+					//System.out.println(e.toString());
 				}
 			}
 		}
@@ -507,8 +540,17 @@ public class CMSimulation extends DemoApplication{
 				concentrationData.flush();
 			}
 			catch(IOException e){
-				System.out.println("Error writing data to concentration file.");
-				System.out.println(e.toString());
+				String p = "Error writing data to concentration file.";
+				try{
+					logfile.write(p);
+					logfile.write(e.toString());
+				}
+				
+				catch(IOException e1){
+					e1.printStackTrace();
+				}
+				//System.out.println("Error writing data to concentration file.");
+				//System.out.println(e.toString());
 			}
 		}
 	}
@@ -539,9 +581,18 @@ public class CMSimulation extends DemoApplication{
 				cellData.flush();
 			}
 			catch(IOException e){
-				System.out.println("Cannot write to position file");
-				System.out.println(e.toString());
-			}
+				String s = "Cannot write to position file";
+				try{
+					logfile.write(s);
+					logfile.write(e.toString());}
+				
+				catch(IOException e1){
+					e1.printStackTrace();}
+				
+				//System.out.println(e.toString());
+				}
+				
+			
 		}
 	}
 	
@@ -571,8 +622,18 @@ public class CMSimulation extends DemoApplication{
 							membraneData.flush();
 						}
 						catch(IOException e){
-							System.out.println("Cannot write to membrane data file");
-							System.out.println(e.toString());
+							String s = "Cannot write to membrane data file";
+							try{
+								logfile.write(s);
+								logfile.write(e.toString());
+							}
+							
+							catch(IOException e1){
+								e1.printStackTrace();
+							}
+							
+							//System.out.println("Cannot write to membrane data file");
+							//System.out.println(e.toString());
 						}
 					}
 				}
@@ -639,10 +700,21 @@ public class CMSimulation extends DemoApplication{
 			concentrationData.close();
 			membraneData.flush();
 			membraneData.close();
+			logfile.flush();
+			logfile.close();
 		}
 		catch(IOException e){
-			System.out.println("Unable to close output files");
-			System.out.println(e.toString());
+			String s = "Unable to close output files";
+			
+				try{ 
+					logfile.write(s);
+					logfile.write(e.toString());
+				}
+				
+				catch(IOException e1){
+					e1.printStackTrace();
+				}
+			//System.out.println(e.toString());
 		}
 		if (concentrationSolver != null){
 			concentrationSolver.destroy();

@@ -21,24 +21,21 @@ import java.util.Random;
 import javax.vecmath.Matrix3f;
 import javax.vecmath.Vector3f;
 
-import com.bulletphysics.BulletGlobals;
+import shapes.CMGImpactMeshSphere;
 
+import com.bulletphysics.BulletGlobals;
 import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.extras.gimpact.GImpactMeshShape;
 import com.bulletphysics.collision.shapes.TriangleCallback;
 import com.bulletphysics.collision.shapes.TriangleIndexVertexArray;
 import com.bulletphysics.collision.shapes.TriangleShape;
-
 import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
 import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.linearmath.Transform;
-
 import com.bulletphysics.dynamics.constraintsolver.RotationalLimitMotor;
-
-import cellModel.shapes.CMGImpactMeshSphere;
 
 import static com.bulletphysics.demos.opengl.IGL.*;
 
