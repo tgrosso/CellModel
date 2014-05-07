@@ -79,6 +79,7 @@ public class CMSimGenerator {
 			String line;
 			
 			PrintWriter pw = new PrintWriter(new File(baseFile, "inputFile.txt"));
+			pw.println("\\\\Seed = " + seed);
 			
 			while ((line = br.readLine()) != null) {
 				pw.println(line);

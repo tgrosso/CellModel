@@ -338,14 +338,17 @@ public class CMConcentrationSolver {
 	
 	public long timeToReach(float distanceFromSource, float threshold){
 		//return time in milliseconds
+		if (sourceConc == sinkConc){
+			//If there is no gradient, all parts of the channel are the same
+			return 0;
+		}
+		if (sourceConc == 0){
+			return 0;
+		}
 		if (threshold > sourceConc){
 			System.err.println("Threshold cannot be greater than source concentration!");
 			System.err.println("Returning time to steady state.");
 			return timeToSteady * 1000;
-		}
-		if (sourceConc == sinkConc){
-			//If there is no gradient, all parts of the channel are the same
-			return 0;
 		}
 		if (distanceFromSource == 0){
 			//You are already at the maximum concentration

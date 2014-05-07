@@ -122,7 +122,7 @@ public class CMSimulation extends DemoApplication{
 	private long imageDelay = 1000000/30; //microseconds beteen images => 30 frames per second
 	private long lastImageTime; // last time an images was generated in microseconds
 	private File dataDir = null, solverDir = null, templateDir = null;
-	private BufferedWriter groupData = null, cellData = null, concentrationData = null, membraneData = null, pdeData = null;
+	private BufferedWriter groupData = null, cellData = null, concentrationData = null, membraneData = null, pdeData = null, logFile = null;
 	
 	private CMConcentrationSolver concentrationSolver;
 	private long timeBetweenFrames = 60*1000000; //microseconds per frame
@@ -160,6 +160,7 @@ public class CMSimulation extends DemoApplication{
 					membraneData = new BufferedWriter(new FileWriter(baseName + "membraneProData.csv"));
 					membraneData.write("Time Since Sim Start\tProtein\tCellID\tSegmentID\tBoundReceptors\tUnboundReceptors\tLigand Concentration");
 					membraneData.newLine();
+					logFile = new BufferedWriter(new FileWriter(baseName + "logFile.txt"));
 					if (generator.generateImages){
 						File imageFile = new File(generator.baseFile, "image");
 						imageFile.mkdirs();
@@ -193,9 +194,9 @@ public class CMSimulation extends DemoApplication{
 		float[] proColor0 = new float[3];
 		float[] proColor1 = new float[3];
 		proColor0[0] = 1f; proColor0[1] = 0f; proColor0[2]=0f;
-		//proColor1[0] = 1f; proColor1[1] = 1f; proColor1[2]=0f;
+		proColor1[0] = 1f; proColor1[1] = 1f; proColor1[2]=0f;
 		proteins.add(new CMEGFR(this, proColor0));
-		//proteins.add(new CMIntegrin(this, proColor1));
+		proteins.add(new CMIntegrin(this, proColor1));
 		viewingProtein = 0;
 		
 		//Set initial times
@@ -629,6 +630,21 @@ public class CMSimulation extends DemoApplication{
 		return finished;
 	}
 	
+	public void writeToLog(String s){
+		try{
+			logFile.write(s);
+			logFile.newLine();
+		}
+		catch(IOException e){
+			System.err.println("Could not write to log file.");
+			System.err.println(e.toString());
+		}
+	}
+	
+	public void writeToLog(Long x){
+		writeToLog("" + x);
+	}
+	
 	public void wrapUp(){
 		try{
 			groupData.flush();
@@ -639,6 +655,7 @@ public class CMSimulation extends DemoApplication{
 			concentrationData.close();
 			membraneData.flush();
 			membraneData.close();
+			logFile.close();
 		}
 		catch(IOException e){
 			System.out.println("Unable to close output files");
