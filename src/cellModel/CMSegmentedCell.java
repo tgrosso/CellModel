@@ -21,6 +21,8 @@ import java.util.Random;
 import javax.vecmath.Matrix3f;
 import javax.vecmath.Vector3f;
 
+import shapes.CMGImpactMeshSphere;
+
 import com.bulletphysics.BulletGlobals;
 
 import com.bulletphysics.collision.narrowphase.ManifoldPoint;
@@ -301,53 +303,8 @@ public class CMSegmentedCell extends CMCell{
 					return;
 				}
 				
-				//check for proteins that bind with laminin
-				for (int i = 0; i < sim.getNumProteins(); i++){
-					CMMembraneProtein pro = sim.getProtein(i);
-					if (!pro.bindsToLaminin()){
-						continue;
-					}
-				
-					//Find out the triangle which is colliding
-					int triangleIndex = pt.index0;
-					if (triangleIndex<0){
-						triangleIndex = pt.index1;
-					}
-					if (triangleIndex < 0){
-						//no triangle found
-						return;
-					}
-					
-				
-					//Find the vertices of the triangle
-					Vector3f[] vertices = new Vector3f[3];
-					triangleVerticesCallback tcb = new triangleVerticesCallback(triangleIndex, vertices);
-					cellShape.processAllTriangles(tcb, aabbMin, aabbMax);
-					vertices = tcb.getVertices();
-					Transform collTrans = new Transform();
-					body.getMotionState().getWorldTransform(collTrans);
-					for (int j = 0; j < vertices.length; j++){
-						collTrans.transform(vertices[j]);
-						//System.out.println(vertices[i]);
-					}
-					
-					//For simplicities sake, we project the membrane segment's triangle onto the laminin-coated wall
-					//We are currently assuming that the wall is below the triangle
-				
-					//Find the number of unbound integrin molecules on the segment
-					long unboundIntegrins = freeProteins[triangleIndex][i];
-					sim.writeToLog(unboundIntegrins);
-					//Find the surface density of laminin
-					float lamininDensity = wall.getLamininDensity();
-				}
-				
-				
-				//Find the number of laminin molecules on this area of the wall
-				//Find the number of constraints (each represents 1000 molecules)
-				//Distribute those contraints randomly around the triangle
-				//Note - to find a random point on the triangle:
-				//http://adamswaab.wordpress.com/2009/12/11/random-point-in-a-triangle-barycentric-coordinates/
-				
+				//Find out the triangle which is colliding
+				//Find the 
 				
 				/*
 				//Get the position and orientation of the constraint
@@ -619,30 +576,6 @@ public class CMSegmentedCell extends CMCell{
 			parent.triangleAreas[triangleIndex] = area;
 			//System.out.println("triangle " + triangleIndex + " area " + area);
 			
-		}
-	}
-	
-	private static class triangleVerticesCallback extends TriangleCallback {
-		Vector3f[] vertices;
-		int index;
-
-		public triangleVerticesCallback(int i, Vector3f[] v) {
-			vertices = new Vector3f[3];
-			index = i;
-		}
-		
-		public void processTriangle(Vector3f[] triangle, int partId, int triangleIndex) {
-			if (triangleIndex == index){
-				for (int i = 0; i < 3; i++){
-					vertices[i] = new Vector3f(triangle[i]);
-				}
-				return;
-			}
-			
-		}
-		
-		public Vector3f[] getVertices(){
-			return vertices;
 		}
 	}
 
