@@ -15,6 +15,8 @@
 package cellModel;
 
 import java.awt.image.BufferedImage;
+import java.awt.Graphics;
+import java.awt.Color;
 import javax.imageio.ImageIO;
 import java.nio.ByteBuffer;
 import org.lwjgl.BufferUtils;
@@ -57,7 +59,7 @@ public class CMImageGenerator {
 		return buf;
 	}
 	
-	public boolean makeImage(){
+	public boolean makeImage(String imageText){
 		
 		String fileName = "img-" + String.format("%09d", frameNumber) + ".gif";
 		//try to open file
@@ -74,6 +76,10 @@ public class CMImageGenerator {
 					image.setRGB(i, height - (j + 1), (0xFF << 24) | (r << 16) | (g << 8) | b);
 				}
 			}
+			Graphics g = image.getGraphics();
+			g.setColor(Color.BLACK);
+			g.drawString(imageText, 10, height - 10);
+			g.dispose();
 			ImageIO.write(image, format, imageFile);
 		}
 		catch(IOException e){

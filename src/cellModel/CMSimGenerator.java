@@ -225,7 +225,7 @@ public class CMSimGenerator {
 		else{
 			csgs = new CMSimGenerator[1];
 			System.err.println("No input files - Using default values.");
-			csgs[1] = new CMSimGenerator(dataDir, seed);
+			csgs[0] = new CMSimGenerator(dataDir, seed);
 		}
 		
 		for (int i = 0; i < csgs.length; i++){

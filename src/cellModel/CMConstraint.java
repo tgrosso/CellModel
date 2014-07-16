@@ -24,7 +24,9 @@ public interface CMConstraint {
 	public void checkIn();
 	public void updateTime();
 	public boolean isActive();
+	public boolean hasBeenActive();
 	public void destroy();
-	public long getID();
+	public long getCollId();
+	public int getConId();
 	public TypedConstraint getConstraint();
 }

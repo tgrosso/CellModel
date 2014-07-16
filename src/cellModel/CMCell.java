@@ -234,7 +234,7 @@ public class CMCell implements CMBioObj{
 		//System.out.println("I am " + getType() + ";" + getID() + " and I have collided");
 		if (c instanceof CMWall){
 			if (sim.constraintExists(collId)){
-				sim.getConstraint(collId).checkIn();
+				sim.checkInConstraints(collId);
 			}
 			else{
 				float[] mat = {1f, 0f, 0f, 
@@ -258,7 +258,7 @@ public class CMCell implements CMBioObj{
 		otherTrans.inverse();
 		otherTrans.mul(worldTrans);
 		
-		CMGenericConstraint con = new CMGenericConstraint(sim, body, c.getRigidBody(), myTrans, otherTrans, true, 5000, 50, collId, 0, 0, -1);
+		CMGenericConstraint con = new CMGenericConstraint(sim, body, c.getRigidBody(), myTrans, otherTrans, true, collId, 0, 0, -1);
 		con.getConstraint().setLinearLowerLimit(new Vector3f(0, 0, 0));
 		con.getConstraint().setLinearUpperLimit(new Vector3f(3f, 3f, 3f));
 		con.checkIn();

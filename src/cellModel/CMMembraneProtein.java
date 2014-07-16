@@ -23,10 +23,15 @@ import java.util.Vector;
  */
 public class CMMembraneProtein {
 	protected CMSimulation sim;
+	protected float k_e = 0; //internalization rate of bound receptor - units /min
+	protected float k_t = 0; //internalization rate of unbound receptor - units /min
 	protected float maximumDensity;
 	protected float baseDensity;
 	protected float[] baseColor;
 	protected String name;
+	public float avosNum = (float)(6.022e23);
+	public float k_on = 0;
+	protected float Q_r = 0; //Synthesization rate - units nM/min
 	
 	public CMMembraneProtein(CMSimulation s, float maxDen, float baseDen, float[] base, String n){
 		sim = s;
@@ -36,6 +41,17 @@ public class CMMembraneProtein {
 		name = n;
 	}
 	
+	protected float getBoundEndocytosisRate(){
+		return k_e;
+	}
+	
+	protected float getUnboundEndocytosisRate(){
+		return k_t;
+	}
+	
+	protected float getExocytosisRate(){
+		return Q_r;
+	}
 	protected float[] getBaseColor(){
 		return baseColor;
 	}
@@ -56,11 +72,11 @@ public class CMMembraneProtein {
 		return 0;
 	}
 	
-	protected long updateFreeReceptors(float ligandConcentration, long currentBound, long currentFree, float portion, float deltaTime){
+	protected long updateFreeReceptors(float ligandConcentration, long currentBound, long currentFree, float freeEndo, float exo, float deltaTime){
 		return 0;
 	}
 	
-	protected long updateBoundReceptors(float ligandConcentration, long currentBound, long currentFree, float deltaTime){
+	protected long updateBoundReceptors(float ligandConcentration, long currentBound, long currentFree, float boundEndo, float deltaTime){
 		return 0;
 	}
 	

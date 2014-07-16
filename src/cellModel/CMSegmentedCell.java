@@ -21,10 +21,9 @@ import java.util.Random;
 import javax.vecmath.Matrix3f;
 import javax.vecmath.Vector3f;
 
-import shapes.CMGImpactMeshSphere;
+import cellModel.shapes.CMGImpactMeshSphere;
 
 import com.bulletphysics.BulletGlobals;
-
 import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.extras.gimpact.GImpactMeshShape;
@@ -38,10 +37,7 @@ import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
 import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.linearmath.Transform;
-
-import com.bulletphysics.dynamics.constraintsolver.RotationalLimitMotor;
-
-import cellModel.shapes.CMGImpactMeshSphere;
+import com.bulletphysics.dynamics.constraintsolver.Generic6DofConstraint;
 
 import static com.bulletphysics.demos.opengl.IGL.*;
 
@@ -73,6 +69,9 @@ public class CMSegmentedCell extends CMCell{
 	private float[] boundColor = {.8f, .8f, 1.0f};
 	private long[][] freeProteins;
 	private long[][] boundProteins;
+	private float[][] boundEndocytosisRates;
+	private float[][] unboundEndocytosisRates;
+	private float[][] exocytosisRates;
 	private float[] triangleAreas;
 	private float[] ligandConc;
 	private float cellSurfaceArea;
@@ -80,6 +79,7 @@ public class CMSegmentedCell extends CMCell{
 	private float[][] color;
 	private float maxVel = 25f;
 	private int currentVisualizingProtein = -1;
+	private int molsPerConstraint = 100;
 	
 	private Transform trans;
 	private Vector3f origin;
@@ -154,6 +154,7 @@ public class CMSegmentedCell extends CMCell{
 		if (setPros){
 			setProteins();
 		}
+		
 	}
 	
 	public static CMBioObjGroup fillSpace(CMSimulation sim, int numCell, float r, int dl, Vector3f minP, Vector3f maxP, String name, boolean setPro){
@@ -171,17 +172,17 @@ public class CMSegmentedCell extends CMCell{
 		//RCP >= numCells and C/R approx w/h and P/R approx d/h
 		//So R^3 >= numCells * h^2 / w * d
 		int numRows = (int)(Math.ceil(Math.pow(numCell * height * height / (width * depth), 1.0/3.0)));
-		System.out.println("Num rows: " + numRows);
+		//System.out.println("Num rows: " + numRows);
 		float rowHeight = height/numRows;
-		System.out.println("Row Height: " + rowHeight);
+		//System.out.println("Row Height: " + rowHeight);
 		int numCols = (int)(Math.ceil(numRows * width / height));
-		System.out.println("Num cols: " + numCols);
+		//System.out.println("Num cols: " + numCols);
 		float colWidth = width/numCols;
-		System.out.println("colWidth: " + colWidth);
+		//System.out.println("colWidth: " + colWidth);
 		int numPages = (int)(Math.ceil(numCell / ((float)numRows * numCols)));
-		System.out.println("numPages: " + numPages);
+		//System.out.println("numPages: " + numPages);
 		float pageDepth = depth/numPages;
-		System.out.println("pageDepth: " + pageDepth);
+		//System.out.println("pageDepth: " + pageDepth);
 		
 		//TODO:  If rowHeight or colWidth or pageDepth are too small to fit the cell
 		//Adjust the number of rows or columns until
@@ -276,14 +277,24 @@ public class CMSegmentedCell extends CMCell{
 			int numTriangles = cellShape.getNumTriangles();
 			freeProteins = new long[numTriangles][numProteins];
 			boundProteins = new long[numTriangles][numProteins];
+			boundEndocytosisRates = new float[numTriangles][numProteins];
+			unboundEndocytosisRates = new float[numTriangles][numProteins];
+			exocytosisRates = new float[numTriangles][numProteins];
 			for (int i = 0; i < numTriangles; i++){
 				freeProteins[i] = new long[numProteins];
 				boundProteins[i] = new long[numProteins];
+				boundEndocytosisRates[i] = new float[numProteins];
+				unboundEndocytosisRates[i] = new float[numProteins];
+				exocytosisRates[i] = new float[numProteins];
 				for (int j = 0; j < numProteins; j++){
-					float totalProteins = sim.getProtein(j).getInitialProteins(1.0f);
-					freeProteins[i][j] = sim.getProtein(j).getInitialProteins(triangleAreas[i]/cellSurfaceArea);
-					boundProteins[i][j] = (long)0;
+					CMMembraneProtein pro = sim.getProtein(j);
+					float totalProteins = pro.getInitialProteins(1.0f);
+					freeProteins[i][j] = pro.getInitialProteins(triangleAreas[i]/cellSurfaceArea);
+					boundProteins[i][j] = 0;
 					//System.out.println("Total Protein: " + totalProteins + " Seg: " + i + " Pro: " + j + " Free: " + freeProteins[i][j] + " Bound: " + boundProteins[i][j]);
+					boundEndocytosisRates[i][j] = pro.getBoundEndocytosisRate();
+					unboundEndocytosisRates[i][j] = pro.getUnboundEndocytosisRate();
+					exocytosisRates[i][j] = pro.getExocytosisRate() * triangleAreas[i]/cellSurfaceArea;
 				}
 			}
 		}
@@ -292,120 +303,172 @@ public class CMSegmentedCell extends CMCell{
 	
 	
 	public void collided(CMBioObj c, ManifoldPoint pt, long collId){
+		if (sim.constraintExists(collId)){
+			sim.checkInConstraints(collId); //check in to all constraints from this collision
+			return;
+		}
 		if (c instanceof CMWall){
-			if (sim.constraintExists(collId)){
-				sim.getConstraint(collId).checkIn();
+			//Find out if the wall has laminin on it
+			//Really we should be seeing if the other object has any proteins that bind!!
+			CMWall wall = (CMWall)c;
+			if (!wall.isLamininCoated()){
+				return;
 			}
-			else{
-				//Find out if the wall has laminin on it
-				CMWall wall = (CMWall)c;
-				if (!wall.isLamininCoated()){
-					return;
-				}
+			
+			Transform myTrans = new Transform();
+			body.getMotionState().getWorldTransform(myTrans);
+			Transform otherTrans = new Transform();
+			c.getRigidBody().getMotionState().getWorldTransform(otherTrans);
 				
-				//Find out the triangle which is colliding
-				//Find the 
-				
-				/*
-				//Get the position and orientation of the constraint
-				Vector3f positionA = new Vector3f();
-				Vector3f positionB = new Vector3f();
-				pt.getPositionWorldOnA(positionA);
-				pt.getPositionWorldOnB(positionB);
-				Vector3f position = new Vector3f();
-				position.add(positionA, positionB);
-				position.scale(0.5f);
-				
-				float[] mat = {1f, 0f, 0f, 
-								0f, 1f, 0f,
-								0f, 0f, 1f};
-				Matrix3f world = new Matrix3f(mat);
-				Transform worldTrans = new Transform();
-				worldTrans.basis.set(world);
-				worldTrans.origin.set(position);
-				
-				//Get the world transforms from the two bodies
-				Transform myTrans = new Transform();
-				Transform otherTrans = new Transform();
-				
-				body.getMotionState().getWorldTransform(myTrans);
-				c.getRigidBody().getMotionState().getWorldTransform(otherTrans);
-				
-				//Get the inverses of the transforms
-				myTrans.inverse();
-				otherTrans.inverse();
-				
-				//Multiply the inverses by the world transform
-				myTrans.mul(worldTrans);
-				otherTrans.mul(worldTrans);
-				
-				//Determine the strength of the constraint
-				//Find out if the protein binds to laminin
-				int numProteins = sim.getNumProteins();
-				int boundProteins = 0;
-				int maxProteins = 0;
-				int triangle = pt.index0;
-				if (triangle<0){
-					triangle = pt.index1;
-				}
-				if (triangle < 0){
-					//no triangle found
-					return;
-				}
-				for (int i = 0; i < numProteins; i++){
-					CMMembraneProtein pro = sim.getProtein(i);
-					/*
-					if (pro.bindsToLaminin()){
-						int ligandProteins = Math.round(wall.getLamininDensity() * triangleAreas[triangle]);
-						int freeReceptors = Math.round(freeProteins[triangle][i] * triangleAreas[triangle]);
-						int boundReceptors = Math.round(boundProteins[triangle][i] * triangleAreas[triangle]);
-						int newBoundProteins = pro.bindReceptors(ligandProteins, freeReceptors);
-						if (newBoundProteins < 10){
-							newBoundProteins = 0; //minimum number of proteins required for bond
-						}
-						maxProteins += (freeReceptors + boundReceptors);
-						freeReceptors = freeReceptors - newBoundProteins;
-						if (freeReceptors < 0){
-							freeReceptors = 0;
-						}
-						freeDensities[triangle][i] = freeReceptors / triangleAreas[triangle];
-						boundReceptors = boundReceptors + newBoundProteins;
-						boundDensities[triangle][i] = boundReceptors / triangleAreas[triangle];
-						
-						boundProteins += newBoundProteins;
-						System.out.println("Free Receptors: " + freeReceptors + " Bound: " + boundReceptors);
-					} */
-				//}
-				/*
-				//System.out.println("Bound: " + boundProteins + " Max: " + maxProteins);
-				CMGenericConstraint con = new CMGenericConstraint(sim, body, c.getRigidBody(), myTrans, otherTrans, true, 5000, 50, collId, boundProteins, maxProteins, triangle);
-				con.checkIn();
-				sim.addConstraint(con);
-				*/
+			//Find out the triangle which is colliding
+			int triangleIndex = pt.index0;
+			if (triangleIndex<0){
+				triangleIndex = pt.index1;
 			}
-		}
-	}
-	
-	public void breakBonds(int brokenBonds, int seg){
-		//return some of the broken bonds to be free
-		if (seg >= 0){
-			int numProteins = sim.getNumProteins();
-			for (int i = 0; i<numProteins; i++){
+			if (triangleIndex < 0){
+				//no triangle found
+				return;
+			}
+				
+			sim.writeToLog(sim.getFormattedTime() + " Cell " + myId + " Collision. Triangle " + triangleIndex + " Collision Id " + collId);
+			
+			//Get the surface Laminin density
+			float lamininDensity = wall.getLamininDensity();
+				
+			//Find the vertices of the triangle
+			Vector3f[] vertices = new Vector3f[3];
+			triangleVerticesCallback tcb = new triangleVerticesCallback(triangleIndex);
+			cellShape.processAllTriangles(tcb, aabbMin, aabbMax);
+			vertices = tcb.getVertices();
+			//TODO - should we just update the Transform whenever we update?
+			//sim.writeToLog("   Finding Triangle Vertices: ");
+			for (int i = 0; i < vertices.length; i++){
+				//sim.writeToLog("      Pre-transform vertex " + i + vertices[i]);
+				myTrans.transform(vertices[i]);
+				//sim.writeToLog("      Post-transform vertex " + i + vertices[i]);
+			}
+			
+			//For simplicities sake, we project the membrane segment's triangle onto the laminin-coated wall
+			//We are currently assuming that the wall is below the triangle
+			//TODO Figure out where the wall is in relation to the triangle
+			Vector3f min = new Vector3f();
+			Vector3f max = new Vector3f();
+			wall.getRigidBody().getAabb(min, max);
+			float wallY = max.y;
+			
+				
+			//Find the area of the triangle projected onto the wall
+			//Find the number of laminin molecules on this area of the wall
+			//We are going to project onto xz plane - this should be generalized!
+			Vector3f[] wallVert = new Vector3f[3];
+			for (int i = 0; i < 3; i++){
+				wallVert[i] = new Vector3f(vertices[i].x, wallY, vertices[i].z);
+				sim.writeToLog("   Wall Vertex[" + i + "] " + wallVert[i]);
+			}
+			float wallArea = findTriangleArea(wallVert);
+			float lamininMolecules = lamininDensity * wallArea;
+			sim.writeToLog("   laminin molecules: " + lamininMolecules);
+			
+			//check for proteins that bind with laminin
+			for (int i = 0; i < sim.getNumProteins(); i++){
 				CMMembraneProtein pro = sim.getProtein(i);
-				if (pro.bindsToLaminin()){
-					/*
-					float maxDensity = pro.getMaxDensity();
-					int freeReceptors = Math.round(freeProteins[seg][i] * triangleAreas[seg]);
-					int boundReceptors = Math.round(boundProteins[seg][i] * triangleAreas[seg]);
-					boundReceptors -= brokenBonds * .9f;
-					freeReceptors += brokenBonds * .9f;
-					freeProteins[seg][i] = freeReceptors/triangleAreas[seg];
-					boundProteins[seg][i] = boundReceptors/triangleAreas[seg];
-					*/
+				sim.writeToLog("Protein? " + pro.getName() + " binds? " + pro.bindsToLaminin());
+				if (!pro.bindsToLaminin()){
+					continue;
 				}
-			}
-		}
-	}
+				sim.writeToLog("   Protein binding " + pro.getName());
+				//Find the number of unbound integrin molecules on the segment
+				//System.out.println("Protein " + pro.getName());
+				int unboundProteins = (int)freeProteins[triangleIndex][i];
+				sim.writeToLog("   unbound proteins: " + unboundProteins);
+				if (unboundProteins < molsPerConstraint){
+					continue;
+				}
+					
+				//Find out the number of constraints formed with this protein
+				int newBound = pro.bindReceptors((int)lamininMolecules, unboundProteins);
+				newBound = Math.min(newBound, unboundProteins);
+				int numConstraints = newBound/molsPerConstraint;
+				sim.writeToLog("   Binding Proteins: " + newBound);
+				sim.writeToLog("   Attempting to make " + numConstraints + " constraints");
+					
+				//TODO let user determine the number of bonds/constraint
+					
+				//Distribute the constraints randomly around the triangle
+				//Note - to find a random point on the triangle:
+				//http://adamswaab.wordpress.com/2009/12/11/random-point-in-a-triangle-barycentric-coordinates/
+				for (int j = 0; j < numConstraints; j++){
+					//Find a random point on the triangle
+					//get two vectors on the triangle
+					Vector3f ab = new Vector3f(vertices[1]);
+					ab.sub(vertices[0]);
+					//System.out.println(vertices[1] + " - " + vertices[0] + " = " + ab);
+					Vector3f ac = new Vector3f(vertices[2]);
+					ac.sub(vertices[0]);
+					//System.out.println(vertices[2] + " - " + vertices[0] + " = " + ac);
+					float r = sim.nextRandomF();
+					float s = sim.nextRandomF();
+					if (r + s >= 1){
+						r = 1 - r;
+						s = 1 - s;
+					}
+					ab.scale(r);
+					ac.scale(s);
+					Vector3f randVec = new Vector3f(vertices[0]);
+					randVec.add(ab);
+					randVec.add(ac);
+					//sim.writeToLog("Random Triangle Point: " + randVec);
+						
+					//Find the distance between this point and the point on the wall.
+					float yDist = Math.abs(randVec.y - wallY);
+					if (yDist <= 1.5){
+						//make the constraint
+						Vector3f wallVec = new Vector3f(randVec.x, wallY, randVec.z);
+						//sim.writeToLog("Random Wall Point: " + wallVec);
+						//We need the points on the cell and on the wall in the local frames of reference
+						
+						Transform cellTrans = new Transform(myTrans);
+						cellTrans.inverse();
+						cellTrans.transform(randVec);
+						cellTrans.origin.set(randVec);
+						cellTrans.basis.set(myTrans.basis);
+						//sim.writeToLog("myTrans origin " + myTrans.origin);
+						//sim.writeToLog("myTrans basis \n" + myTrans.basis);
+						//sim.writeToLog("cellTrans origin " + cellTrans.origin);
+						//sim.writeToLog("cellTrans basis " + cellTrans.basis);
+						
+						Transform wallTrans = new Transform(otherTrans);
+						wallTrans.inverse();
+						wallTrans.transform(wallVec);
+						wallTrans.origin.set(wallVec);
+						wallTrans.basis.set(otherTrans.basis);
+						//sim.writeToLog("otherTrans origin " + otherTrans.origin);
+						//sim.writeToLog("otherTrans basis \n" + otherTrans.basis);
+						//sim.writeToLog("wallTrans origin " + wallTrans.origin);
+						//sim.writeToLog("wallTrans basis " + wallTrans.basis);
+					
+						CMGenericConstraint con = new CMGenericConstraint(sim, c.getRigidBody(), body, wallTrans, cellTrans, true, collId, j, triangleIndex, i);
+						con.checkIn();
+						
+						Generic6DofConstraint constraint = con.getConstraint();
+						constraint.setLimit(0, 0f, 0f);
+						constraint.setLimit(1, 0f, 1f);
+						constraint.setLimit(2, 0f, 0f);
+						
+
+						//sim.addConstraint(con);
+						freeProteins[triangleIndex][i] -= molsPerConstraint; //remove free proteines
+						boundProteins[triangleIndex][i] += molsPerConstraint; //add bound proteins
+						sim.writeToLog("      Made a constraint");
+						
+					}//end if constraint is short enough
+					else{
+						sim.writeToLog("      Constraint too long. Not created.");
+					}
+				}//end for loop to go through constraints	
+			}//end for loop for each protein
+		}//end if collision is with a wall
+	}//end collided
 	
 	public void updateObject(){
 		if (!body.isActive()){
@@ -443,6 +506,11 @@ public class CMSegmentedCell extends CMCell{
 			setSegmentColor(i, c[0] * percent, c[1] * percent, c[2] * percent);
 		}
 		
+	}
+	
+	public void reclaimMembraneProteins(int segment, int pro){
+		boundProteins[segment][pro] -= molsPerConstraint;
+		freeProteins[segment][pro] += molsPerConstraint;
 	}
 	
 	public boolean specialRender(IGL gl, Transform t){
@@ -491,6 +559,26 @@ public class CMSegmentedCell extends CMCell{
 	
 	public float getTriangleLigandConc(int index){
 		return ligandConc[index];
+	}
+	
+	private float findTriangleArea(Vector3f[] vertices){
+		//Find the lengths of the sides
+		float a = (float)Math.sqrt(Math.pow((vertices[1].x - vertices[0].x), 2) +
+				Math.pow((vertices[1].y - vertices[0].y), 2) + Math.pow((vertices[1].z - vertices[0].z), 2));
+		float b = (float)Math.sqrt(Math.pow((vertices[2].x - vertices[1].x), 2) +
+				Math.pow((vertices[2].y - vertices[1].y), 2) + Math.pow((vertices[2].z - vertices[1].z), 2));
+		float c = (float)Math.sqrt(Math.pow((vertices[2].x - vertices[0].x), 2) +
+				Math.pow((vertices[2].y - vertices[0].y), 2) + Math.pow((vertices[2].z - vertices[0].z), 2));
+		//Use Heron's forumla
+		float s = (float)(.5 * (a + b + c));
+		
+		float area = (float)(Math.sqrt(s * (s-a) * (s-b) * (s-c)));
+		//System.out.println("Finding area for: ");
+		//for (int i = 0; i < 3; i++){
+		//	System.out.print(vertices[i].toString() + " ");
+		//}
+		//System.out.println(" Area: " + area);
+		return area;
 	}
 	
 	private static class drawSegmentsCallback extends TriangleCallback {
@@ -542,9 +630,9 @@ public class CMSegmentedCell extends CMCell{
 				for (int i = 0; i < parent.sim.getNumProteins(); i++){
 					//update the free receptors
 					//parent.freeProteins[triangleIndex][i] = parent.sim.getProtein(i).updateFreeProteins(area, ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], deltaTime);
-					parent.freeProteins[triangleIndex][i] = parent.sim.getProtein(i).updateFreeReceptors(ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], parent.triangleAreas[triangleIndex]/parent.cellSurfaceArea, deltaTime);
+					parent.freeProteins[triangleIndex][i] = parent.sim.getProtein(i).updateFreeReceptors(ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], parent.unboundEndocytosisRates[triangleIndex][i], parent.exocytosisRates[triangleIndex][i], deltaTime);
 					//update the bound receptors
-					parent.boundProteins[triangleIndex][i] = parent.sim.getProtein(i).updateBoundReceptors(ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], deltaTime);
+					parent.boundProteins[triangleIndex][i] = parent.sim.getProtein(i).updateBoundReceptors(ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], parent.boundEndocytosisRates[triangleIndex][i], deltaTime);
 					//System.out.println("Segment: " + triangleIndex + " free: " + parent.freeDensities[triangleIndex][i] + " bound: " + parent.boundDensities[triangleIndex][i]);
 				}
 			}
@@ -562,20 +650,35 @@ public class CMSegmentedCell extends CMCell{
 		public void processTriangle(Vector3f[] triangle, int partId, int triangleIndex) {
 			//System.out.println("Processing triangle areas");
 			//find the area
-			float ab_squ = (triangle[1].x - triangle[0].x) * (triangle[1].x - triangle[0].x) +
-					(triangle[1].y - triangle[0].y) * (triangle[1].y - triangle[0].y) +
-					(triangle[1].z - triangle[0].z) * (triangle[1].z - triangle[0].z);
-			float bc_squ = (triangle[2].x - triangle[1].x) * (triangle[2].x - triangle[1].x) +
-					(triangle[2].y - triangle[1].y) * (triangle[2].y - triangle[1].y) +
-					(triangle[2].z - triangle[1].z) * (triangle[2].z - triangle[1].z);
-			float ca_squ = (triangle[2].x - triangle[0].x) * (triangle[2].x - triangle[0].x) +
-					(triangle[2].y - triangle[0].y) * (triangle[2].y - triangle[0].y) +
-					(triangle[2].z - triangle[0].z) * (triangle[2].z - triangle[0].z);
 				
-			float area = (float)(.25 * Math.sqrt(4 * ab_squ * bc_squ - (Math.pow(ab_squ + bc_squ - ca_squ, 2))));
+			float area = parent.findTriangleArea(triangle);
 			parent.triangleAreas[triangleIndex] = area;
 			//System.out.println("triangle " + triangleIndex + " area " + area);
 			
+		}
+	}
+	
+	private static class triangleVerticesCallback extends TriangleCallback {
+		Vector3f[] vertices;
+		int index;
+
+		public triangleVerticesCallback(int i) {
+			vertices = new Vector3f[3];
+			index = i;
+		}
+		
+		public void processTriangle(Vector3f[] triangle, int partId, int triangleIndex) {
+			if (triangleIndex == index){
+				for (int i = 0; i < 3; i++){
+					vertices[i] = new Vector3f(triangle[i]);
+				}
+				return;
+			}
+			
+		}
+		
+		public Vector3f[] getVertices(){
+			return vertices;
 		}
 	}
 

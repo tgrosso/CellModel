@@ -24,32 +24,32 @@ import com.bulletphysics.dynamics.constraintsolver.Generic6DofConstraint;
 import com.bulletphysics.linearmath.Transform;
 
 public class CMGenericConstraint implements CMConstraint{ // implements CMBioObj {
+	private int MAX_CONSTRAINTS = 100;
 	private boolean isActive; //the constraint is active.. either a current constraint or a constraint that needs to be added to the world
+	private boolean neverActive = true;
 	private int checked; //checks in number of constraints (can keep track of number for destroy method)
 	private long initialTime; //need to find a way to subtract Date values
-	private long life; // amount of time the constraint will last
-	private long collisionID;
-	private float bonds, maxBonds;
+	private long lifeSpan = 60 * 10 * 1000 * 1000; // longest lifespan in microseconds (10 minutes)
+	private float a = 3f/(lifeSpan * lifeSpan);
+	private long collisionId;
+	private int constraintId;
 	private int segment = -1;
+	private int proteinId = -1;
 	CMSegmentedCell cell = null;
 	CMSimulation sim;
 	Generic6DofConstraint constraint;
 	
-	public CMGenericConstraint(CMSimulation s, CMRigidBody rbA, CMRigidBody rbB, Transform localA, Transform localB, boolean useLinearReferenceFrameA, long mu, long sd, long ID, int bds, int maxBds, int seg){
+	public CMGenericConstraint(CMSimulation s, CMRigidBody rbA, CMRigidBody rbB, Transform localA, Transform localB, boolean useLinearReferenceFrameA, long collId, int conId, int seg, int pro){
 		constraint= new Generic6DofConstraint(rbA, rbB, localA, localB, true);
 		sim = s;
 		isActive = false;
 		checked = 0;
-		collisionID = ID;
+		collisionId = collId;
+		constraintId = conId; 
 		initialTime = sim.getCurrentTimeMicroseconds();
-		life = (long) ((mu) + (sim.nextGaussianF() * sd));
-		if (life < 0){
-			life = 0;
-		}
-		bonds = bds;
-		maxBonds = maxBds;
 		sim.addConstraint(this);
 		segment = seg;
+		proteinId = pro;
 		if (rbA.getParent() instanceof CMSegmentedCell){
 			cell = (CMSegmentedCell)rbA.getParent();
 		}
@@ -62,6 +62,7 @@ public class CMGenericConstraint implements CMConstraint{ // implements CMBioObj
 		
 		if (checked >= 2){
 			isActive = true;// if is active is = true, do we want the cells to stick to more than one other cell?
+			neverActive = false;
 		}
 		
 		
@@ -69,24 +70,38 @@ public class CMGenericConstraint implements CMConstraint{ // implements CMBioObj
 	
 	//updating time to see if constraint continues or is broken in next time step
 	public void updateTime(){
-		if (bonds < 10){
-			isActive = false;
-			return;
-		}
-		float strength = (bonds/(float)maxBonds);
-		float maxBondLength = 1.5f;
-		float bondLength = (1.0f - strength)*maxBondLength;
-		float angularLimitX = strength * BulletGlobals.SIMD_PI;
-		float angularLimitYZ = strength * BulletGlobals.SIMD_HALF_PI;
-		constraint.setLinearLowerLimit(new Vector3f(0, 0, 0));
-		constraint.setLinearUpperLimit(new Vector3f(0f, bondLength, 0f));
-		constraint.setAngularLowerLimit(new Vector3f(-angularLimitX, -angularLimitYZ, -angularLimitYZ));
-		constraint.setAngularUpperLimit(new Vector3f(angularLimitX, angularLimitYZ, angularLimitYZ)); //can rotate around z axis
-		int brokenBonds = Math.round(bonds * .1f);
-		bonds = bonds - brokenBonds; //Have to make this based on probability
-		cell.breakBonds(brokenBonds, segment);
-		//System.out.println("Constraint " + collisionID + " Strength: " + strength);
+		long age = sim.getCurrentTimeMicroseconds() - initialTime;
+		long time = sim.getCurrentTimeMicroseconds();
+		float deg = getDegraded(time);
+		float fa = getFocalAdhesionDevelopment(time);
+		float force = getForceFactor(time);
 		
+		float prob = deg * fa * force;
+		
+		if (sim.nextRandomF() < prob){
+			isActive = false;
+		}
+		
+		//System.out.println("Constraint CollId: " + collisionID + " age: " + age + " deg: " + deg + " fa: " + fa);
+		//System.out.println("     prob " + prob + " alive: " + isActive);
+	}
+	
+	public float getDegraded(long age){
+		//This is the probability of breakage due to kinase degredation. It increases linearly with time.
+		float x = (float)age;
+		float degradation = (float)(x / lifeSpan);
+		return degradation;
+	}
+	
+	public float getFocalAdhesionDevelopment(long age){
+		//This is the probability of breakage due to focal adhesions develop and then degrade over time
+		long value = age - (lifeSpan/2);
+		float fad = a * value * value + .25f;
+		return fad;
+	}
+	
+	public float getForceFactor(long currentTime){
+		return .5f;
 	}
 	
 	//need better way to clean this up
@@ -96,19 +111,38 @@ public class CMGenericConstraint implements CMConstraint{ // implements CMBioObj
 	
 	
 	public void destroy(){
+		sim.writeToLog("Destroying Constraint: Collision Id " + collisionId + " constraint Id " + constraintId + " lifespan " + (sim.getCurrentTimeMicroseconds() - initialTime));
 		if (isActive != true){
 			//objects informed that the constraint is removed... this might have been informed in isCAlive
 			//remove checks
 			
 			//constraint removed in CMSimulation by removeConstraint method in DynamicsWorld
+			if (neverActive){
+				//if never activated, return all unused bound proteins
+				if (cell != null){
+					cell.reclaimMembraneProteins(segment, proteinId);
+				}
+			}
 		}
 	}
 	
-	public long getID(){
-		return (collisionID);
+	public long getCollId(){
+		return (collisionId);
+	}
+	
+	public int getConId(){
+		return (constraintId);
+	}
+	
+	public boolean hasBeenActive(){
+		return !neverActive;
 	}
 	
 	public Generic6DofConstraint getConstraint(){
 		return constraint;
 	}
+	
+	//public static CMGenericConstraint createConstraint(){
+	//	
+	//}
 }

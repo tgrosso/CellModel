@@ -23,13 +23,13 @@ public class CMIntegrin extends CMMembraneProtein {
 	//These are values for EGF.  Need to find new values for CMMembraneProtein
 	float k_off = .24f; //reverse rate of binding of ligand to receptor units /min
 	float k_e = .15f; //internalization rate of bound receptor - units /min
-	float k_t = .02f; //internalization rate of unbound recept - units /min
+	float k_t = .02f; //internalization rate of unbound receptor - units /min
 	float k_D = 2.47f; //Dissociation constant - units nM
 	//Data taken from human mammary epithelial cells - diameter about 15 micrometer
-	long R_t = 200000;; 
-		//steady state receptor abundance - units molecules/micron^2
-	float k_on; //forward rate of ligand binding
-	float Q_r; //Synthesization rate - units nM/min
+	long R_t = 200000; 
+		//steady state receptor abundance for whole cell units molecules
+	float k_on=k_off/k_D; //forward rate of ligand binding
+	float Q_r = R_t * k_t; //Synthesization rate - units molecules/min
 	boolean attaches = true;
 
 	public CMIntegrin(CMSimulation s, float[] base){
@@ -39,58 +39,64 @@ public class CMIntegrin extends CMMembraneProtein {
 	}
 	
 	@Override
-	protected long updateFreeReceptors(float ligandConcentration, long currentBound, long currentFree, float portion, float deltaTime){
-		//ligandConcentration units is nM
+	protected float getBoundEndocytosisRate(){
+		return k_e; //units /min
+	}
+	
+	@Override
+	protected float getUnboundEndocytosisRate(){
+		return k_t; //units /min
+	}
+	
+	@Override
+	protected float getExocytosisRate(){
+		return Q_r; //units molecules/min
+	}
+	
+	@Override
+	protected long updateFreeReceptors(float ligandConcentration, long currentBound, long currentFree, float freeEndo, float exo, float deltaTime){
+		//For integrins, we don't use the ligandConcentration - they bind in a different method
 		//receptor units are molecules
+		//rate units are /min
+		//exo units are molecules/min
 		//deltaT units is minutes
 		//using forward Euler method
-		System.out.println("***Updating Free Integrins***");
-		System.out.print("Ligand Conc " + ligandConcentration);
+
 		long R = currentFree; //Number of free receptors on surface
-		System.out.print(" Free Receptors: " + R);
-		long C = currentBound; //Number of bound receptors on surface
-		System.out.print(" Bound Receptors: " + C);
-		float dR = deltaTime * (-k_on * R * ligandConcentration + k_off * C - k_t * R + Q_r * portion);
-		System.out.print(" delta R = " + dR);
+		float dR = deltaTime * (freeEndo * R + exo);
 		float newFree = R + dR;
-		System.out.println( " newFree = " + newFree);
-				
 		return (long)(newFree);
 	}
 	
 	@Override
-	protected long updateBoundReceptors(float ligandConcentration, long currentBound, long currentFree, float deltaTime){
-		//ligandConcentration units is nM
-		//receptor units are molecules/micon^2
-		//surface area units is micron^2
-		//deltaT units is minutes
-		//using forward Euler method
-		System.out.println("***Updating Bound Integrins***");
-		System.out.print("Ligand Conc " + ligandConcentration);
-		long R = currentFree; //Number of free receptors on surface
-		System.out.print(" Free Receptors: " + R);
-		long C = currentBound; //Number of bound receptors on surface
-		System.out.print(" Bound Receptors: " + C);
-		float dC = deltaTime * (k_on * R * ligandConcentration - k_off * C - k_e * C);
-		System.out.print(" delta C = " + dC);
-		float newBound = C + dC;
-		System.out.println( " newBound = " + newBound);
-		
-		return (long)(newBound);
+	protected long updateBoundReceptors(float ligandConcentration, long currentBound, long currentFree, float boundEndo, float deltaTime){
+		//for integrins, the number of bound receptors is solely based on the 
+		//number of constraints that are made.
+		//We only use all of these parameters because it is a membrane protein
+		return (long)(currentBound);
 	}
 	
-	public int bindReceptors(int numLigands, int numFreeReceptors){
-		int boundProteins = Math.round(k_on * Math.min(numLigands, numFreeReceptors));
-		//System.out.println(numLigands + ", " + numFreeReceptors + ", " + boundProteins);
-		return boundProteins;
+	@Override
+	public long getInitialProteins(float portion){
+		return (long)(R_t * portion);
 	}
 	
+	@Override
 	public boolean bindsToLaminin(){
 		return attaches;
 	}
 	
+	@Override
+	public int bindReceptors(int numLigands, int numFreeReceptors){
+		//float deltaTime = sim.getDeltaTimeMilliseconds() / 1000f / 60f;
+		//return (int)(Math.round(numLigands * numFreeReceptors * k_on * deltaTime));
+		int possibleBonds = Math.min(numLigands, numFreeReceptors);
+		int bonds = (int)(Math.round(sim.nextRandomF() * k_on * possibleBonds));
+		return bonds;
+	}
+	
+	@Override
 	public String getName(){
 		return "Integrin";
 	}
 }
-

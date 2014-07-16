@@ -10,14 +10,14 @@ public class CMEGFR extends CMMembraneProtein{
 	long R_t = 200000; 
 		//steady state receptor abundance for whole cell units molecules
 	float k_on=k_off/k_D; //forward rate of ligand binding
-	float Q_r = R_t * k_t; //Synthesization rate - units nM/min
+	float Q_r = R_t * k_t; //Synthesization rate - units molecules/min
 
 	public CMEGFR(CMSimulation s, float[] base){
 		super(s, (200000f / (float)(4 * Math.PI * 7.5 * 7.5)), (200000f / (float)(4 * Math.PI * 7.5 * 7.5)), base, "EGFR");
 	}
 	
 	@Override
-	protected long updateFreeReceptors(float ligandConcentration, long currentBound, long currentFree, float portion, float deltaTime){
+	protected long updateFreeReceptors(float ligandConcentration, long currentBound, long currentFree, float freeEndo, float exo, float deltaTime){
 		//ligandConcentration units is nM
 		//receptor units are molecules
 		//surface area units is micron^2
@@ -31,7 +31,7 @@ public class CMEGFR extends CMMembraneProtein{
 		//System.out.print(" Free Receptors: " + R);
 		long C = currentBound; //Number of bound receptors on surface
 		//System.out.print(" Bound Receptors: " + C);
-		float dR = deltaTime * (-k_on * R * ligandConcentration + k_off * C - k_t * R + Q_r * portion);
+		float dR = deltaTime * (-k_on * R * ligandConcentration + k_off * C - freeEndo * R + exo);
 		//System.out.print(" delta R = " + dR);
 		float newFree = R + dR;
 		//System.out.println( " newFree = " + newFree);
@@ -40,7 +40,7 @@ public class CMEGFR extends CMMembraneProtein{
 	}
 	
 	@Override
-	protected long updateBoundReceptors(float ligandConcentration, long currentBound, long currentFree, float deltaTime){
+	protected long updateBoundReceptors(float ligandConcentration, long currentBound, long currentFree, float boundEndo, float deltaTime){
 		//ligandConcentration units is nM
 		//receptor units are molecules
 		//deltaT units is minutes
@@ -51,7 +51,7 @@ public class CMEGFR extends CMMembraneProtein{
 		//System.out.print(" Free Receptors: " + R);
 		long C = currentBound; //Number of bound receptors on surface
 		//System.out.print(" Bound Receptors: " + C);
-		float dC = deltaTime * (k_on * R * ligandConcentration - k_off * C - k_e * C);
+		float dC = deltaTime * (k_on * R * ligandConcentration - k_off * C - boundEndo * C);
 		//System.out.print(" delta C = " + dC);
 		float newBound = C + dC;
 		//System.out.println( " newBound = " + newBound);
@@ -59,11 +59,33 @@ public class CMEGFR extends CMMembraneProtein{
 		return (long)(newBound);
 	}
 	
+	@Override
 	public boolean bindsToLaminin(){
 		return false;
 	}
 	
+	@Override
 	public long getInitialProteins(float portion){
 		return (long)(R_t * portion);
+	}
+	
+	@Override
+	public int bindReceptors(int numLigands, int numFreeReceptors){
+		return (int)(Math.round((Math.max(numLigands, numFreeReceptors) * k_on)));
+	}
+	
+	@Override
+	protected float getBoundEndocytosisRate(){
+		return k_e;
+	}
+	
+	@Override
+	protected float getUnboundEndocytosisRate(){
+		return k_t;
+	}
+	
+	@Override
+	protected float getExocytosisRate(){
+		return Q_r;
 	}
 }

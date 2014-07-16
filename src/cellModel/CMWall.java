@@ -143,7 +143,7 @@ public class CMWall implements CMBioObj{
 		
 		if (c instanceof CMCell){
 			if (sim.constraintExists(collId)){
-				sim.getConstraint(collId).checkIn();
+				sim.checkInConstraints(collId);
 			}
 			else{
 				//Let the cell handle the collision
