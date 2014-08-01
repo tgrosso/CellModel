@@ -14,23 +14,14 @@
  */
 package cellModel;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.Random;
 
-import javax.vecmath.Matrix3f;
 import javax.vecmath.Vector3f;
 
 import cellModel.shapes.CMGImpactMeshSphere;
 
-import com.bulletphysics.BulletGlobals;
 import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.CollisionShape;
-import com.bulletphysics.extras.gimpact.GImpactMeshShape;
 import com.bulletphysics.collision.shapes.TriangleCallback;
-import com.bulletphysics.collision.shapes.TriangleIndexVertexArray;
-import com.bulletphysics.collision.shapes.TriangleShape;
-import com.bulletphysics.extras.gimpact.TriangleShapeEx;
 
 import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.dynamics.RigidBody;
@@ -38,6 +29,7 @@ import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
 import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.linearmath.Transform;
 import com.bulletphysics.dynamics.constraintsolver.Generic6DofConstraint;
+import com.bulletphysics.dynamics.constraintsolver.TranslationalLimitMotor;
 
 import static com.bulletphysics.demos.opengl.IGL.*;
 
@@ -61,14 +53,14 @@ public class CMSegmentedCell extends CMCell{
 	private int myId;
 	private int numSegments;
 	
-	private float density = 1.10f;
+	private float density = 1.50f;
 	private float mass;
 	private float radius;
 	private float volume;
 	private float[] freeColor = {1.0f, .8f, .8f};
 	private float[] boundColor = {.8f, .8f, 1.0f};
-	private long[][] freeProteins;
-	private long[][] boundProteins;
+	private float[][] freeProteins;
+	private float[][] boundProteins;
 	private float[][] boundEndocytosisRates;
 	private float[][] unboundEndocytosisRates;
 	private float[][] exocytosisRates;
@@ -123,7 +115,6 @@ public class CMSegmentedCell extends CMCell{
 		DefaultMotionState motionState = new DefaultMotionState(trans);
 		RigidBodyConstructionInfo rbInfo = new RigidBodyConstructionInfo(mass, motionState, cellShape, localInertia);
 		body = new CMRigidBody(rbInfo, this);
-		
 		numSegments = cellShape.getNumTriangles();
 		
 		sim.setNeedsGImpact(true);
@@ -275,14 +266,14 @@ public class CMSegmentedCell extends CMCell{
 		int numProteins = sim.getNumProteins();
 		if (numProteins > 0){
 			int numTriangles = cellShape.getNumTriangles();
-			freeProteins = new long[numTriangles][numProteins];
-			boundProteins = new long[numTriangles][numProteins];
+			freeProteins = new float[numTriangles][numProteins];
+			boundProteins = new float[numTriangles][numProteins];
 			boundEndocytosisRates = new float[numTriangles][numProteins];
 			unboundEndocytosisRates = new float[numTriangles][numProteins];
 			exocytosisRates = new float[numTriangles][numProteins];
 			for (int i = 0; i < numTriangles; i++){
-				freeProteins[i] = new long[numProteins];
-				boundProteins[i] = new long[numProteins];
+				freeProteins[i] = new float[numProteins];
+				boundProteins[i] = new float[numProteins];
 				boundEndocytosisRates[i] = new float[numProteins];
 				unboundEndocytosisRates[i] = new float[numProteins];
 				exocytosisRates[i] = new float[numProteins];
@@ -363,7 +354,7 @@ public class CMSegmentedCell extends CMCell{
 			Vector3f[] wallVert = new Vector3f[3];
 			for (int i = 0; i < 3; i++){
 				wallVert[i] = new Vector3f(vertices[i].x, wallY, vertices[i].z);
-				sim.writeToLog("   Wall Vertex[" + i + "] " + wallVert[i]);
+				//sim.writeToLog("   Wall Vertex[" + i + "] " + wallVert[i]);
 			}
 			float wallArea = findTriangleArea(wallVert);
 			float lamininMolecules = lamininDensity * wallArea;
@@ -372,7 +363,7 @@ public class CMSegmentedCell extends CMCell{
 			//check for proteins that bind with laminin
 			for (int i = 0; i < sim.getNumProteins(); i++){
 				CMMembraneProtein pro = sim.getProtein(i);
-				sim.writeToLog("Protein? " + pro.getName() + " binds? " + pro.bindsToLaminin());
+				//sim.writeToLog("Protein? " + pro.getName() + " binds? " + pro.bindsToLaminin());
 				if (!pro.bindsToLaminin()){
 					continue;
 				}
@@ -421,7 +412,7 @@ public class CMSegmentedCell extends CMCell{
 						
 					//Find the distance between this point and the point on the wall.
 					float yDist = Math.abs(randVec.y - wallY);
-					if (yDist <= 1.5){
+					if (yDist <= 2.5){
 						//make the constraint
 						Vector3f wallVec = new Vector3f(randVec.x, wallY, randVec.z);
 						//sim.writeToLog("Random Wall Point: " + wallVec);
@@ -454,6 +445,9 @@ public class CMSegmentedCell extends CMCell{
 						constraint.setLimit(0, 0f, 0f);
 						constraint.setLimit(1, 0f, 1f);
 						constraint.setLimit(2, 0f, 0f);
+						TranslationalLimitMotor tlm = constraint.getTranslationalLimitMotor();
+						tlm.damping = 2.0f;
+						tlm.restitution = .1f;
 						
 
 						//sim.addConstraint(con);
@@ -629,7 +623,6 @@ public class CMSegmentedCell extends CMCell{
 			if (deltaTime > 0){
 				for (int i = 0; i < parent.sim.getNumProteins(); i++){
 					//update the free receptors
-					//parent.freeProteins[triangleIndex][i] = parent.sim.getProtein(i).updateFreeProteins(area, ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], deltaTime);
 					parent.freeProteins[triangleIndex][i] = parent.sim.getProtein(i).updateFreeReceptors(ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], parent.unboundEndocytosisRates[triangleIndex][i], parent.exocytosisRates[triangleIndex][i], deltaTime);
 					//update the bound receptors
 					parent.boundProteins[triangleIndex][i] = parent.sim.getProtein(i).updateBoundReceptors(ligand, parent.boundProteins[triangleIndex][i], parent.freeProteins[triangleIndex][i], parent.boundEndocytosisRates[triangleIndex][i], deltaTime);

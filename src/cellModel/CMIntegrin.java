@@ -34,7 +34,7 @@ public class CMIntegrin extends CMMembraneProtein {
 
 	public CMIntegrin(CMSimulation s, float[] base){
 		super(s, (200000f / (float)(4 * Math.PI * 7.5 * 7.5)), (200000f / (float)(4 * Math.PI * 7.5 * 7.5)), base, "EGFR");
-		k_on = .7f;
+		k_on = .05f;
 		Q_r = R_t * k_t;
 	}
 	
@@ -54,7 +54,7 @@ public class CMIntegrin extends CMMembraneProtein {
 	}
 	
 	@Override
-	protected long updateFreeReceptors(float ligandConcentration, long currentBound, long currentFree, float freeEndo, float exo, float deltaTime){
+	protected float updateFreeReceptors(float ligandConcentration, float currentBound, float currentFree, float freeEndo, float exo, float deltaTime){
 		//For integrins, we don't use the ligandConcentration - they bind in a different method
 		//receptor units are molecules
 		//rate units are /min
@@ -62,23 +62,23 @@ public class CMIntegrin extends CMMembraneProtein {
 		//deltaT units is minutes
 		//using forward Euler method
 
-		long R = currentFree; //Number of free receptors on surface
-		float dR = deltaTime * (freeEndo * R + exo);
+		float R = currentFree; //Number of free receptors on surface
+		float dR = deltaTime * (-freeEndo * R + exo);
 		float newFree = R + dR;
-		return (long)(newFree);
+		return (newFree);
 	}
 	
 	@Override
-	protected long updateBoundReceptors(float ligandConcentration, long currentBound, long currentFree, float boundEndo, float deltaTime){
+	protected float updateBoundReceptors(float ligandConcentration, float currentBound, float currentFree, float boundEndo, float deltaTime){
 		//for integrins, the number of bound receptors is solely based on the 
 		//number of constraints that are made.
 		//We only use all of these parameters because it is a membrane protein
-		return (long)(currentBound);
+		return (currentBound);
 	}
 	
 	@Override
-	public long getInitialProteins(float portion){
-		return (long)(R_t * portion);
+	public float getInitialProteins(float portion){
+		return (R_t * portion);
 	}
 	
 	@Override
@@ -91,7 +91,7 @@ public class CMIntegrin extends CMMembraneProtein {
 		//float deltaTime = sim.getDeltaTimeMilliseconds() / 1000f / 60f;
 		//return (int)(Math.round(numLigands * numFreeReceptors * k_on * deltaTime));
 		int possibleBonds = Math.min(numLigands, numFreeReceptors);
-		int bonds = (int)(Math.round(sim.nextRandomF() * k_on * possibleBonds));
+		int bonds = (int)(sim.nextRandomF() * k_on * possibleBonds);
 		return bonds;
 	}
 	

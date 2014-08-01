@@ -51,6 +51,7 @@ public class CMSimGenerator {
 	public long timeToSteadyState = 11*60*60; //time to steady state in seconds
 	public boolean generateImages = false;
 	public float secBetweenOutput = .5f;
+	public int secBetweenImages = 60;
 	public long seed = 0;
 	
 	public CMSimGenerator(File base, long sd){
@@ -197,6 +198,15 @@ public class CMSimGenerator {
 			}
 			catch(NumberFormatException e){
 				System.err.println("endTime must be a long. Found " + val + ". Using default");
+			}
+		}
+		else if (v.compareTo("secBetweenImages") == 0){
+			try{
+				secBetweenImages = Integer.parseInt(val);
+				System.out.println("secBetweenImages set to " + endTime);
+			}
+			catch(NumberFormatException e){
+				System.err.println("secBetweenImages must be an integer. Found " + val + ". Using default");
 			}
 		}
 		else{

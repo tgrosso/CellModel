@@ -409,7 +409,7 @@ public class CMConcentrationSolver {
 				line = timeReader.readLine();
 			}
 			if (line == null){
-				return oldTime; //This is hte maximum time possible.
+				return oldTime; //This is the maximum time possible.
 			}
 			long thresholdTime = (long)(t2 + ((t1-t2) * (distanceFromSource - distances[distIndex])/(distances[distIndex-1]-distances[distIndex])));
 			return thresholdTime;

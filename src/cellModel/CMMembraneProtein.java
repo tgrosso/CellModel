@@ -68,15 +68,15 @@ public class CMMembraneProtein {
 		return maximumDensity;
 	}
 	
-	protected long getInitialProteins(float portion){
+	protected float getInitialProteins(float portion){
 		return 0;
 	}
 	
-	protected long updateFreeReceptors(float ligandConcentration, long currentBound, long currentFree, float freeEndo, float exo, float deltaTime){
+	protected float updateFreeReceptors(float ligandConcentration, float currentBound, float currentFree, float freeEndo, float exo, float deltaTime){
 		return 0;
 	}
 	
-	protected long updateBoundReceptors(float ligandConcentration, long currentBound, long currentFree, float boundEndo, float deltaTime){
+	protected float updateBoundReceptors(float ligandConcentration, float currentBound, float currentFree, float boundEndo, float deltaTime){
 		return 0;
 	}
 	

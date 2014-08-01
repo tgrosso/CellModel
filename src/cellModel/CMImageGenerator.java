@@ -59,7 +59,7 @@ public class CMImageGenerator {
 		return buf;
 	}
 	
-	public boolean makeImage(String imageText){
+	public boolean makeImage(float sinkConc, float sourceConc, String expTimeString, String proName, boolean bound){
 		
 		String fileName = "img-" + String.format("%09d", frameNumber) + ".gif";
 		//try to open file
@@ -78,7 +78,14 @@ public class CMImageGenerator {
 			}
 			Graphics g = image.getGraphics();
 			g.setColor(Color.BLACK);
-			g.drawString(imageText, 10, height - 10);
+			String receptors = " (Unbound)";
+			if (bound){
+				receptors = " (Bound)";
+			}
+			g.drawString(("Sink Conc: " + sinkConc), 10, height - 25);
+			g.drawString(("Source Conc: " + sourceConc), width - 250, height - 25);
+			g.drawString(("Viewing Protein: " + proName + receptors), 10, height - 10);
+			g.drawString(("Experimental Time: " + expTimeString), width - 250, height-10);
 			g.dispose();
 			ImageIO.write(image, format, imageFile);
 		}

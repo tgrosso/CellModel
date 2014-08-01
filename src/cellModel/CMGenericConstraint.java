@@ -29,7 +29,7 @@ public class CMGenericConstraint implements CMConstraint{ // implements CMBioObj
 	private boolean neverActive = true;
 	private int checked; //checks in number of constraints (can keep track of number for destroy method)
 	private long initialTime; //need to find a way to subtract Date values
-	private long lifeSpan = 60 * 10 * 1000 * 1000; // longest lifespan in microseconds (10 minutes)
+	private long lifeSpan = 60 * 20 * 1000 * 1000; // longest lifespan in microseconds (10 minutes)
 	private float a = 3f/(lifeSpan * lifeSpan);
 	private long collisionId;
 	private int constraintId;
@@ -97,11 +97,11 @@ public class CMGenericConstraint implements CMConstraint{ // implements CMBioObj
 		//This is the probability of breakage due to focal adhesions develop and then degrade over time
 		long value = age - (lifeSpan/2);
 		float fad = a * value * value + .25f;
-		return fad;
+		return (.5f * fad);
 	}
 	
 	public float getForceFactor(long currentTime){
-		return .5f;
+		return .1f;
 	}
 	
 	//need better way to clean this up

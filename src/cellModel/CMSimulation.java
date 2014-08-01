@@ -113,6 +113,7 @@ public class CMSimulation extends DemoApplication{
 	private ObjectArrayList<CMBioObjGroup> objectGroups = new ObjectArrayList<CMBioObjGroup>();
 	private ObjectArrayList<CMConstraint> constraints = new ObjectArrayList<CMConstraint>();
 	private ObjectArrayList<CMMembraneProtein> proteins = new ObjectArrayList<CMMembraneProtein>();
+	private ObjectArrayList<CMProteinInteraction> interactions = new ObjectArrayList<CMProteinInteraction>();
 	private boolean proteinsAdded = false;
 	private BroadphaseInterface broadphase;
 	private CollisionDispatcher dispatcher;
@@ -150,6 +151,7 @@ public class CMSimulation extends DemoApplication{
 		summaryDelay = (long)(generator.secBetweenOutput * 1000000);
 		summaryFormat.setTimeZone(TimeZone.getTimeZone(generator.timeZone)); //To get the right time formats, need Grenwhich Mean Time
 
+		timeBetweenFrames = (long)(generator.secBetweenImages * 1000000);
 		//Create output files
 		
 		try {	
@@ -209,8 +211,10 @@ public class CMSimulation extends DemoApplication{
 		proColor1[0] = 1f; proColor1[1] = 1f; proColor1[2]=0f;
 		proteins.add(new CMEGFR(this, proColor0));
 		proteins.add(new CMIntegrin(this, proColor1));
-		viewingProtein = 0;
+		viewingProtein = 1;
 		
+		CMProteinInteraction egfr_integrin = new CMProteinInteraction(this, 0, 1, .05f, .7f);
+		egfr_integrin.setMaxResponse(1.1f, CMProteinInteraction.EXOCYTOSIS);
 		//Set initial times
 		startTime = clock.getTimeMicroseconds(); //clock is inherited from DemoApplication
 		currentTime = 0;
@@ -251,10 +255,10 @@ public class CMSimulation extends DemoApplication{
 			Vector3f max = channel.getMaxChannelVector();
 			float floor = min.y;
 			//Vector3f center = new Vector3f((max.x - min.x)/2f + min.x, (max.y - min.y)/2f + min.y, (max.z-min.z)/2f + min.z);
-			min.scale(.67f);
+			min.scale(.45f);
 			min.y = floor;
-			max.scale(.67f);
-			max.y = floor + 15f;
+			max.scale(.45f);
+			max.y = floor + 12f;
 			
 			CMBioObjGroup microCells = CMSegmentedCell.randomFillSurface(this, generator.numCells, 10f, 1, min, max, "RPC", true);
 			objectGroups.add(microCells);
@@ -689,8 +693,12 @@ public class CMSimulation extends DemoApplication{
 	}
 	
 	public String getFormattedTime(){
-		Date nowTime = new Date(currentTime/1000);
-		String nowString = summaryFormat.format(nowTime);	
+		return getFormattedTime(currentTime);
+	}
+	
+	public String getFormattedTime(Long time_ms){
+		Date nowTime = new Date(time_ms/1000);
+		String nowString = summaryFormat.format(nowTime);
 		return nowString;
 	}
 	
@@ -725,7 +733,11 @@ public class CMSimulation extends DemoApplication{
 	}
 	
 	public void outputImage(){
-		imageGenerator.makeImage("Sink: " + generator.sinkConc + " Source: " + generator.sourceConc + " Time: " + getFormattedTime());
+		String timeString = getFormattedTime();
+		if (assayType == CMAssay.MICROFLUIDIC && channel != null){
+			timeString = getFormattedTime(currentTime + channel.getTimeToReach());
+		}
+		imageGenerator.makeImage(generator.sinkConc, generator.sourceConc, timeString, proteins.getQuick(viewingProtein).getName(), false); 
 		lastImageTime = currentTime;
 	}
 	
