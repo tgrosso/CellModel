@@ -45,14 +45,9 @@ import com.bulletphysics.collision.dispatch.CollisionDispatcher;
 import com.bulletphysics.collision.dispatch.DefaultCollisionConfiguration;
 import com.bulletphysics.collision.narrowphase.PersistentManifold;
 import com.bulletphysics.collision.narrowphase.ManifoldPoint;
-import com.bulletphysics.collision.shapes.BoxShape;
-import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.demos.opengl.DemoApplication;
-import com.bulletphysics.demos.opengl.GLDebugDrawer;
 import com.bulletphysics.demos.opengl.IGL;
-import com.bulletphysics.demos.opengl.LWJGL;
 import com.bulletphysics.demos.opengl.GLShapeDrawer;
-import com.bulletphysics.demos.opengl.FastFormat;
 import com.bulletphysics.dynamics.DiscreteDynamicsWorld;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.dynamics.constraintsolver.ConstraintSolver;
@@ -66,8 +61,6 @@ import com.bulletphysics.linearmath.DebugDrawModes;
 
 import javax.vecmath.Vector3f;
 
-import org.lwjgl.LWJGLException;
-
 import static com.bulletphysics.demos.opengl.IGL.*;
 
 import java.util.Random;
@@ -78,7 +71,6 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.File;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 /**
@@ -92,8 +84,6 @@ public class CMSimulation extends DemoApplication{
 	private int width = 900, height = 600;
 
 	// maximum number of objects (test tube walls and apparatus, molecules and cells)
-	private static final int NUM_MOLECULES = 1500;
-	private static final int NUM_CELLS = 1;
 	private final CMAssay assayType = CMAssay.MICROFLUIDIC;
 	private static SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
 	private static SimpleDateFormat summaryFormat = new SimpleDateFormat("HH:mm:ss:SSS");
@@ -103,7 +93,7 @@ public class CMSimulation extends DemoApplication{
 	
 	private static CMTranswellChamber chamber;
 	private static CMMicrofluidicChannel channel;
-	private Vector3f aabbMin = new Vector3f(), aabbMax = new Vector3f();
+
 	
 	private boolean needGImpact = false;
 	
@@ -211,7 +201,7 @@ public class CMSimulation extends DemoApplication{
 		proColor1[0] = 1f; proColor1[1] = 1f; proColor1[2]=0f;
 		proteins.add(new CMEGFR(this, proColor0));
 		proteins.add(new CMIntegrin(this, proColor1));
-		viewingProtein = 1;
+		viewingProtein = 0;
 		
 		CMProteinInteraction egfr_integrin = new CMProteinInteraction(this, 0, 1, .05f, .7f);
 		egfr_integrin.setMaxResponse(1.1f, CMProteinInteraction.EXOCYTOSIS);
@@ -247,18 +237,23 @@ public class CMSimulation extends DemoApplication{
 		
 		if(assayType == CMAssay.MICROFLUIDIC){
 			float distFromSource = generator.distFromSource;
-			channel = new CMMicrofluidicChannel(this, distFromSource, concentrationSolver);
+			float channelWidth = generator.channelWidth;
+			channel = new CMMicrofluidicChannel(this, channelWidth, distFromSource, concentrationSolver);
 			channel.writeConcentrationData(concentrationData, currentTime, true);
 			
 			//confine cells to center 2/3 of channel
 			Vector3f min = channel.getMinChannelVector();
+			writeToLog("channel minimum vector: " + min.toString());
 			Vector3f max = channel.getMaxChannelVector();
+			writeToLog("channel maximum vector: " + max.toString());
 			float floor = min.y;
 			//Vector3f center = new Vector3f((max.x - min.x)/2f + min.x, (max.y - min.y)/2f + min.y, (max.z-min.z)/2f + min.z);
-			min.scale(.45f);
-			min.y = floor;
-			max.scale(.45f);
-			max.y = floor + 12f;
+			min.scale(.67f);
+			//min.y = floor;
+			writeToLog("After scaling and setting to floor, min vector: " + min.toString());
+			max.scale(.67f);
+			//max.y = floor + max.y;
+			writeToLog("After scaling and setting to floor, max vector: " + max.toString());
 			
 			CMBioObjGroup microCells = CMSegmentedCell.randomFillSurface(this, generator.numCells, 10f, 1, min, max, "RPC", true);
 			objectGroups.add(microCells);
@@ -358,7 +353,7 @@ public class CMSimulation extends DemoApplication{
 			CMConstraint con = constraints.getQuick(index);
 			con.updateTime();
 			if (!con.isActive()){
-				writeToLog("Removing collId " + con.getCollId() + " constraintId " + con.getConId() + " Used? " + con.hasBeenActive());
+				//writeToLog("Removing collId " + con.getCollId() + " constraintId " + con.getConId() + " Used? " + con.hasBeenActive());
 				removeConstraint(con);
 			}
 			else{

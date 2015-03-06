@@ -111,7 +111,7 @@ public class CMGenericConstraint implements CMConstraint{ // implements CMBioObj
 	
 	
 	public void destroy(){
-		sim.writeToLog("Destroying Constraint: Collision Id " + collisionId + " constraint Id " + constraintId + " lifespan " + (sim.getCurrentTimeMicroseconds() - initialTime));
+		//sim.writeToLog("Destroying Constraint: Collision Id " + collisionId + " constraint Id " + constraintId + " lifespan " + (sim.getCurrentTimeMicroseconds() - initialTime));
 		if (isActive != true){
 			//objects informed that the constraint is removed... this might have been informed in isCAlive
 			//remove checks

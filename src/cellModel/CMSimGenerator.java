@@ -47,11 +47,13 @@ public class CMSimGenerator {
 	public float sinkConc = 0;
 	public float sourceConc = 0;
 	public float distFromSource = 0;
+	public float channelWidth = 300f;
 	public long endTime = 30; //length of run in SECONDS
 	public long timeToSteadyState = 11*60*60; //time to steady state in seconds
 	public boolean generateImages = false;
 	public float secBetweenOutput = .5f;
 	public int secBetweenImages = 60;
+	public boolean displayImages = true;
 	public long seed = 0;
 	
 	public CMSimGenerator(File base, long sd){
@@ -173,6 +175,15 @@ public class CMSimGenerator {
 				System.err.println("distFromSource must be a float. Found " + val + ". Using default");
 			}
 		}
+		else if (v.compareTo("channelWidth") == 0){
+			try{
+				channelWidth = Float.parseFloat(val);
+				System.out.println("channelWidth set to " + channelWidth);
+			}
+			catch(NumberFormatException e){
+				System.err.println("channelWidth must be a float. Found " + val + ". Using default");
+			}
+		}
 		else if (v.compareTo("secBetweenOutput") == 0){
 			try{
 				secBetweenOutput = Float.parseFloat(val);
@@ -182,7 +193,7 @@ public class CMSimGenerator {
 				System.err.println("secBetweenOutput must be a float. Found " + val + ". Using default");
 			}
 		}
-		else if (v.compareTo("captureImages") == 0){
+		else if (v.compareTo("generateImages") == 0){
 			try{
 				generateImages = Boolean.parseBoolean(val);
 				System.out.println("generateImages set to " + generateImages);
@@ -216,20 +227,49 @@ public class CMSimGenerator {
 	}
 	
 	public static void main(String[] args){
+		//Usage CMSimGenerator outputDirectory inputfile1 inputFile2 inputFile3...
 		long seed = System.currentTimeMillis();
 		Date now = new Date();
 		SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
 	    String dateString = df.format(now);
-	    dataDir = new File("CM-" + dateString);
+	    CMSimGenerator[] csgs = null;
+	    
+	    System.out.println("Number of arguments: " + args.length);
+	    if (args.length > 0){
+	    	System.out.println("At least one argument");
+	    	String outputDir = args[0];
+	    	System.out.println("outputDir = " + outputDir);
+	    	File testFile = new File(outputDir);
+	    	if (testFile.isDirectory()){
+	    		try{
+	    			File testDoc = new File(testFile, "test.txt");
+	    			testDoc.createNewFile();
+	    			testDoc.delete();
+	    			dataDir = new File(testFile, "CM-" + dateString);
+	    		}
+	    		catch (IOException e){
+	    			System.err.println("Cannot write to " + outputDir + ". Data Saved In Run Directory");
+		    		dataDir = new File("CM-"+ dateString);
+	    		}
+	    	}
+	    	else{
+	    		System.out.println("Testfile is not directory");
+	    	}
+	    }
+	    
+	    if (dataDir == null){
+	    	System.err.println("Output Directory Unavailable. Data Saved In Run Directory");
+	    	dataDir = new File("CM-"+ dateString);
+	    }
 		dataDir.mkdir();
-		CMSimGenerator[] csgs = null;
+	 
 		
-		if (args.length > 0){
-			csgs = new CMSimGenerator[args.length];
-			for (int i = 0; i < args.length; i++){
+		if (args.length > 1){
+			csgs = new CMSimGenerator[args.length-1];
+			for (int i = 1; i < args.length; i++){
 				System.out.println(args[i]);
 				File f = new File(args[i]);
-				csgs[i] = new CMSimGenerator(f, dataDir, seed);
+				csgs[i-1] = new CMSimGenerator(f, dataDir, seed);
 			}
 		}
 		else{

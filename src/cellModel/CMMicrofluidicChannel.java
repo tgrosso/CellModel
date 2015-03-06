@@ -44,14 +44,16 @@ public class CMMicrofluidicChannel {
 	private long timeToReach = 0;
 	
 	
-	public CMMicrofluidicChannel(CMSimulation s, float d, CMConcentrationSolver sol){
+	public CMMicrofluidicChannel(CMSimulation s, float cw, float d, CMConcentrationSolver sol){
 		sim = s;
+		channelWidth = cw;
 		makeChannel(sim);
 		distFromSource = d;
 		totalLength = 13000f; //13 * 10^5 microns is total length of channel
 		solver = sol;
 		sourceConcentration = solver.getSourceConcentration();
 		sinkConcentration = solver.getSinkConcentration();
+		
 		
 		if (distFromSource + channelWidth > totalLength){
 			distFromSource = totalLength - channelWidth;

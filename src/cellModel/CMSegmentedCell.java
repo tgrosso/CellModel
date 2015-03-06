@@ -321,7 +321,7 @@ public class CMSegmentedCell extends CMCell{
 				return;
 			}
 				
-			sim.writeToLog(sim.getFormattedTime() + " Cell " + myId + " Collision. Triangle " + triangleIndex + " Collision Id " + collId);
+			//sim.writeToLog(sim.getFormattedTime() + " Cell " + myId + " Collision. Triangle " + triangleIndex + " Collision Id " + collId);
 			
 			//Get the surface Laminin density
 			float lamininDensity = wall.getLamininDensity();
@@ -358,7 +358,7 @@ public class CMSegmentedCell extends CMCell{
 			}
 			float wallArea = findTriangleArea(wallVert);
 			float lamininMolecules = lamininDensity * wallArea;
-			sim.writeToLog("   laminin molecules: " + lamininMolecules);
+			//sim.writeToLog("   laminin molecules: " + lamininMolecules);
 			
 			//check for proteins that bind with laminin
 			for (int i = 0; i < sim.getNumProteins(); i++){
@@ -367,11 +367,11 @@ public class CMSegmentedCell extends CMCell{
 				if (!pro.bindsToLaminin()){
 					continue;
 				}
-				sim.writeToLog("   Protein binding " + pro.getName());
+				//sim.writeToLog("   Protein binding " + pro.getName());
 				//Find the number of unbound integrin molecules on the segment
 				//System.out.println("Protein " + pro.getName());
 				int unboundProteins = (int)freeProteins[triangleIndex][i];
-				sim.writeToLog("   unbound proteins: " + unboundProteins);
+				//sim.writeToLog("   unbound proteins: " + unboundProteins);
 				if (unboundProteins < molsPerConstraint){
 					continue;
 				}
@@ -380,8 +380,8 @@ public class CMSegmentedCell extends CMCell{
 				int newBound = pro.bindReceptors((int)lamininMolecules, unboundProteins);
 				newBound = Math.min(newBound, unboundProteins);
 				int numConstraints = newBound/molsPerConstraint;
-				sim.writeToLog("   Binding Proteins: " + newBound);
-				sim.writeToLog("   Attempting to make " + numConstraints + " constraints");
+				//sim.writeToLog("   Binding Proteins: " + newBound);
+				//sim.writeToLog("   Attempting to make " + numConstraints + " constraints");
 					
 				//TODO let user determine the number of bonds/constraint
 					
@@ -453,11 +453,11 @@ public class CMSegmentedCell extends CMCell{
 						//sim.addConstraint(con);
 						freeProteins[triangleIndex][i] -= molsPerConstraint; //remove free proteines
 						boundProteins[triangleIndex][i] += molsPerConstraint; //add bound proteins
-						sim.writeToLog("      Made a constraint");
+						//sim.writeToLog("      Made a constraint");
 						
 					}//end if constraint is short enough
 					else{
-						sim.writeToLog("      Constraint too long. Not created.");
+						//sim.writeToLog("      Constraint too long. Not created.");
 					}
 				}//end for loop to go through constraints	
 			}//end for loop for each protein

@@ -82,6 +82,7 @@ public class CMConcentrationSolver {
 
 			}
 			catch(IOException e1) {
+				System.err.println("IOException: " + e1.toString());
 				System.err.println("Cannot use differential equations - using linear gradient");
 				usePDE = false;
 			}
@@ -210,6 +211,7 @@ public class CMConcentrationSolver {
 		tempOut.println("  ql = 0;");
 		tempOut.println("  pr = ur-" + sourceConc + ";");
 		tempOut.println("  qr = 0;");
+		tempOut.close();
 	}
 	
 	public float getConcentration(float distFromSource, long experimentalTime){
@@ -409,9 +411,11 @@ public class CMConcentrationSolver {
 				line = timeReader.readLine();
 			}
 			if (line == null){
+				timeReader.close();
 				return oldTime; //This is the maximum time possible.
 			}
 			long thresholdTime = (long)(t2 + ((t1-t2) * (distanceFromSource - distances[distIndex])/(distances[distIndex-1]-distances[distIndex])));
+			timeReader.close();
 			return thresholdTime;
 		}
 		catch(NumberFormatException a){
@@ -420,6 +424,7 @@ public class CMConcentrationSolver {
 		catch(IOException e){
 			System.err.print("Cannot read concentration file. Using Linear gradient" + e);
 		}
+		
 		return (timeToSteady*1000); //I guess this is as good a default as any!
 	}
 	
