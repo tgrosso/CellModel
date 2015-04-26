@@ -19,14 +19,18 @@ package cellModel;
 import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.SphereShape;
 import com.bulletphysics.collision.shapes.CollisionShape;
+
 import javax.vecmath.Vector3f;
+
 import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.linearmath.Transform;
 import com.bulletphysics.util.ObjectArrayList;
 import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
+
 import org.lwjgl.BufferUtils;
+
 import java.nio.FloatBuffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -52,6 +56,7 @@ public class CMMolecule implements CMBioObj{
 	private boolean toRemove = false;
 	private boolean bound = false;
 	private CMSimulation sim;
+	private static boolean finalWritten = false;
 	
 	public CMMolecule(CMSimulation s, Vector3f o){
 		this.origin = o;
@@ -192,5 +197,13 @@ public class CMMolecule implements CMBioObj{
 	}
 	public void bind(){
 		bound = true;
+	}
+	
+	public String finalOutput(){
+		if (finalWritten){
+			return "";
+		}
+		finalWritten = true;
+		return "Need to write final output from CMMolecule";
 	}
 }

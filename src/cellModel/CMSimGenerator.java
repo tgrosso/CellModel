@@ -55,6 +55,8 @@ public class CMSimGenerator {
 	public int secBetweenImages = 60;
 	public boolean displayImages = true;
 	public long seed = 0;
+	public int speedUp = 1;
+	public float motility = 1.0f;
 	
 	public CMSimGenerator(File base, long sd){
 		seed = sd;
@@ -218,6 +220,24 @@ public class CMSimGenerator {
 			}
 			catch(NumberFormatException e){
 				System.err.println("secBetweenImages must be an integer. Found " + val + ". Using default");
+			}
+		}
+		else if (v.compareTo("speedUp") == 0){
+			try{
+				speedUp = Integer.parseInt(val);
+				System.out.println("speedUp set to " + speedUp);
+			}
+			catch(NumberFormatException e){
+				System.err.println("speedUp must be an integer. Found " + val + ". Using default");
+			}
+		}
+		else if (v.compareTo("motility") == 0){
+			try{
+				motility = Float.parseFloat(val);
+				System.out.println("motility set to " + motility);
+			}
+			catch(NumberFormatException e){
+				System.err.println("motility must be a float. Found " + val + ". Using default");
 			}
 		}
 		else{

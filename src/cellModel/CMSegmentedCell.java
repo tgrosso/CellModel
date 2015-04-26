@@ -22,7 +22,6 @@ import cellModel.shapes.CMGImpactMeshSphere;
 import com.bulletphysics.collision.narrowphase.ManifoldPoint;
 import com.bulletphysics.collision.shapes.CollisionShape;
 import com.bulletphysics.collision.shapes.TriangleCallback;
-
 import com.bulletphysics.demos.opengl.IGL;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
@@ -69,7 +68,7 @@ public class CMSegmentedCell extends CMCell{
 	private float cellSurfaceArea;
 	private boolean viewFreeReceptors = true;
 	private float[][] color;
-	private float maxVel = 25f;
+	private float motility = 0.2f;
 	private int currentVisualizingProtein = -1;
 	private int molsPerConstraint = 100;
 	
@@ -80,6 +79,10 @@ public class CMSegmentedCell extends CMCell{
 	private static Vector3f aabbMin = new Vector3f(-1e30f, -1e30f, -1e30f);
 	
 	private static float[] glMat = new float[16];
+	
+	private static boolean finalWritten = false;
+	private static long callsToUpdateReceptors = 0;
+	private static long callsToUpdateObject = 0;
 	
 	
 	
@@ -141,6 +144,7 @@ public class CMSegmentedCell extends CMCell{
 			ligandConc[i] = 0f;
 		}
 		objectType = "Segmented Cell";
+		motility = sim.getMotitlity();
 		//System.out.println("Segmented Cell Created");
 		if (setPros){
 			setProteins();
@@ -469,15 +473,21 @@ public class CMSegmentedCell extends CMCell{
 			//System.out.println("Cell " + this.id + " has been deactivated.");
 			body.activate();
 		}
+		callsToUpdateObject++;
 		//randomly rotate
 		int axis = (int)(sim.nextRandomF() * 3);
-		float vel = sim.nextRandomF() *2 - 1;
+		float direction = sim.nextRandomF(); //zero or one
+		float vel = sim.nextRandomF() * motility;
+		if (direction < .5){
+			vel = -vel;
+		}
 		float[] velVec = new float[3];
 		for (int i = 0; i < 3; i++){
 			velVec[i] = 0f;
 		}
 		velVec[axis] = vel;
-		body.setAngularVelocity(new Vector3f(velVec));
+		//body.setAngularVelocity(new Vector3f(velVec));
+		body.applyTorque(new Vector3f(velVec));
 		
 		//update the proteins
 		updateProteinsCallback proCallback = new updateProteinsCallback(this);
@@ -573,6 +583,16 @@ public class CMSegmentedCell extends CMCell{
 		//}
 		//System.out.println(" Area: " + area);
 		return area;
+	}
+	
+	public String finalOutput(){
+		if (finalWritten){
+			return "";
+		}
+		finalWritten = true;
+		String finalString = "CMSegmentedCell: Total calls to Update Object " + callsToUpdateObject;
+		finalString = finalString + "\nCMSegmentedCell: Total calls to Update Receptors " + callsToUpdateReceptors;
+		return finalString;
 	}
 	
 	private static class drawSegmentsCallback extends TriangleCallback {

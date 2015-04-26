@@ -130,6 +130,9 @@ public class CMSimulation extends DemoApplication{
 	
 	private CMSimGenerator generator = null;
 	
+	private float meanDeltaTime = 0;
+	private long numFrames = 0;
+	
 	public CMSimulation(IGL gl, CMSimGenerator gen){
 		super(gl);
 		setDebugMode(DebugDrawModes.DRAW_TEXT);
@@ -294,10 +297,15 @@ public class CMSimulation extends DemoApplication{
 		gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		// simple dynamics world doesn't handle fixed-time-stepping
 		oldTime = newTime;
-		newTime = clock.getTimeMicroseconds();
+		newTime = clock.getTimeMicroseconds() * generator.speedUp;
 		//writeToLog("New Time " + newTime);
 		//writeToLog("Old Time " + oldTime);
 		deltaTime = newTime - oldTime;
+		
+		//update mean deltaTime
+		numFrames++;
+		meanDeltaTime = meanDeltaTime + (deltaTime - meanDeltaTime)/numFrames;
+		
 		//writeToLog("Delta Time " + deltaTime);
 		if (deltaTime < 0){
 			writeToLog("Delta time is < 0! " + deltaTime);
@@ -691,6 +699,10 @@ public class CMSimulation extends DemoApplication{
 		return getFormattedTime(currentTime);
 	}
 	
+	public float getMotitlity(){
+		return generator.motility;
+	}
+	
 	public String getFormattedTime(Long time_ms){
 		Date nowTime = new Date(time_ms/1000);
 		String nowString = summaryFormat.format(nowTime);
@@ -741,6 +753,17 @@ public class CMSimulation extends DemoApplication{
 	}
 	
 	public void wrapUp(){
+		writeToLog("Final mean frame times : " + meanDeltaTime);
+		writeToLog("Total number of frames : " + numFrames);
+		
+		//output final written work from each type of bioobject
+		writeToLog("\nWriting final data from bioObject types.");
+		int numObjects = modelObjects.size();
+		for (int i = 0; i < numObjects; i++){
+			CMBioObj bioObj = modelObjects.getQuick(i);
+			writeToLog(bioObj.finalOutput());
+		}
+		
 		try{
 			groupData.flush();
 			groupData.close();

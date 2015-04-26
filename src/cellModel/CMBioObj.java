@@ -46,4 +46,5 @@ public interface CMBioObj {
 	public boolean isBound();
 	public void clearBound();
 	public void bind();
+	public String finalOutput();
 }

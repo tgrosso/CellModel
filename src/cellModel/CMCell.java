@@ -59,6 +59,8 @@ public class CMCell implements CMBioObj{
 	protected int currentProb = baseProb; //For Uniform response, the probability that molecule will bind to the whole cell
 	protected int deltaProb = 10;
 	
+	private static boolean finalWritten = false;
+	
 	public CMCell(CMSimulation s, Vector3f o){
 		this.origin = new Vector3f(o);
 		this.sim = s;
@@ -325,5 +327,13 @@ public class CMCell implements CMBioObj{
 	
 	public void bind(){
 		bound = true;
+	}
+	
+	public String finalOutput(){
+		if (finalWritten){
+			return "";
+		}
+		finalWritten = true;
+		return "Need to write final output from CMCell";
 	}
 }

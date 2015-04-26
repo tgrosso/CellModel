@@ -26,10 +26,12 @@ import com.bulletphysics.linearmath.DefaultMotionState;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
 import com.bulletphysics.dynamics.constraintsolver.RotationalLimitMotor;
 import com.bulletphysics.util.ObjectArrayList;
+
 import javax.vecmath.Matrix3f;
 
 import java.nio.FloatBuffer;
 import java.util.Random;
+
 import javax.vecmath.Vector3f;
 
 import org.lwjgl.BufferUtils;
@@ -53,6 +55,7 @@ public class CMWall implements CMBioObj{
 	private float lamininSurfaceDensity; //molecules per micron^2
 	private long lastTimeMilliseconds, currentTimeMilliseconds;
 	private boolean hasLaminin;
+	private static boolean finalWritten = false;
 	
 	public CMWall(CMSimulation s, float w, float h, float d, Vector3f o){
 		float mass = 0;
@@ -191,5 +194,13 @@ public class CMWall implements CMBioObj{
 	
 	public void bind(){
 		bound = true;
+	}
+	
+	public String finalOutput(){
+		if (finalWritten){
+			return "";
+		}
+		finalWritten = true;
+		return "Need to write final output from CMWall";
 	}
 }
